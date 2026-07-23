@@ -1,0 +1,19 @@
+name: Validate rules hub
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate structure and links
+        shell: powershell
+        run: ./scripts/check-hub.ps1
+      - name: Test commit and sync tooling
+        shell: powershell
+        run: ./tests/test-tooling.ps1

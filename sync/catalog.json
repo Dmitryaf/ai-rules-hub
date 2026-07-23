@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "0.1",
+  "core": ["rules/CORE.md"],
+  "topics": {
+    "product": "rules/PRODUCT.md",
+    "architecture-and-data": "rules/ARCHITECTURE_AND_DATA.md",
+    "implementation": "rules/IMPLEMENTATION.md",
+    "quality": "rules/QUALITY.md",
+    "security-and-privacy": "rules/SECURITY_AND_PRIVACY.md",
+    "documentation": "rules/DOCUMENTATION.md",
+    "git-and-delivery": "rules/GIT_AND_DELIVERY.md",
+    "ai-collaboration": "rules/AI_COLLABORATION.md",
+    "research-and-evidence": "rules/RESEARCH_AND_EVIDENCE.md"
+  },
+  "profiles": {
+    "standard-product": {
+      "file": "profiles/standard-product.md",
+      "topics": [
+        "product",
+        "architecture-and-data",
+        "implementation",
+        "quality",
+        "documentation",
+        "git-and-delivery"
+      ]
+    },
+    "data-sensitive": {
+      "file": "profiles/data-sensitive.md",
+      "topics": [
+        "security-and-privacy",
+        "architecture-and-data",
+        "quality",
+        "git-and-delivery"
+      ]
+    },
+    "research-driven": {
+      "file": "profiles/research-driven.md",
+      "topics": [
+        "research-and-evidence",
+        "architecture-and-data",
+        "product",
+        "quality"
+      ]
+    },
+    "learning-project": {
+      "file": "profiles/learning-project.md",
+      "topics": [
+        "ai-collaboration",
+        "product",
+        "documentation",
+        "quality"
+      ]
+    },
+    "public-repository": {
+      "file": "profiles/public-repository.md",
+      "topics": [
+        "security-and-privacy",
+        "documentation",
+        "git-and-delivery"
+      ]
+    }
+  }
+}

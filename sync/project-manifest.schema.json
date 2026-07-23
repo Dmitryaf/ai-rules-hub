@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AI Rules Hub project sync manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "destination", "topics", "profiles"],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": "0.1"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": ["string", "null"],
+          "minLength": 7
+        }
+      }
+    },
+    "destination": {
+      "type": "string",
+      "minLength": 1
+    },
+    "topics": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "product",
+          "architecture-and-data",
+          "implementation",
+          "quality",
+          "security-and-privacy",
+          "documentation",
+          "git-and-delivery",
+          "ai-collaboration",
+          "research-and-evidence"
+        ]
+      }
+    },
+    "profiles": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "standard-product",
+          "data-sensitive",
+          "research-driven",
+          "learning-project",
+          "public-repository"
+        ]
+      }
+    }
+  }
+}

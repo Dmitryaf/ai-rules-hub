@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "0.1",
+  "source": {
+    "repository": "ai-rules-hub",
+    "revision": null
+  },
+  "destination": ".ai-rules",
+  "topics": [],
+  "profiles": ["standard-product"]
+}
