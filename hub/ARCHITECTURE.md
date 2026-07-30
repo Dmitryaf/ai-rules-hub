@@ -6,11 +6,11 @@
 
 ```text
 AGENTS.md целевого проекта
-→ RULESET.md с выбранными слоями
-→ обязательный CORE
+→ .ai-rules/RULESET.md с выбранными слоями
+→ .ai-rules/PROJECT_RULES.md с локальной спецификой
+→ .ai-rules/upstream/CORE.md
 → релевантные темы
 → выбранные профили
-→ локальные правила и исключения
 ```
 
 Хаб остаётся источником шаблонов и обновлений. Подключённый проект владеет локальными правилами, а выбранная копия переносимых правил обновляется явной локальной синхронизацией.
@@ -42,17 +42,17 @@ Core должен оставаться коротким. Правило искл
 
 ### `sync/` и managed-копия
 
-`sync/catalog.json` задаёт разрешённые topics, profiles и их зависимости. Целевой `.ai-rules-hub.json` выбирает состав, а lock хранит revision и SHA-256.
+`sync/catalog.json` задаёт разрешённые topics, profiles и их зависимости. Целевой `.ai-rules/manifest.json` выбирает состав, а `.ai-rules/lock.json` хранит revision и SHA-256.
 
 ```text
 hub checkout + project manifest
 → plan
 → add / update / unchanged / conflict / orphan
 → explicit apply
-→ managed directory + lock
+→ .ai-rules/upstream/ + .ai-rules/lock.json
 ```
 
-Синхронизация не владеет локальной точкой входа и исключениями. Изменение managed-файла после apply считается конфликтом, а не разрешением молча перезаписать проект.
+Синхронизация владеет только `.ai-rules/upstream/` и сгенерированным `.ai-rules/lock.json`. Корневой `AGENTS.md`, `.ai-rules/RULESET.md` и `.ai-rules/PROJECT_RULES.md` принадлежат проекту и после первичного seed не перезаписываются. Изменение upstream-файла после apply считается конфликтом, а не разрешением молча перезаписать проект.
 
 ### `hub/`
 

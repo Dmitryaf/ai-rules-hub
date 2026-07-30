@@ -4,9 +4,7 @@ param(
     [string]$ProjectRoot,
 
     [ValidateSet('Plan', 'Apply')]
-    [string]$Mode = 'Plan',
-
-    [string]$ManifestPath = '.ai-rules-hub.json'
+    [string]$Mode = 'Plan'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -95,6 +93,17 @@ function Get-ObjectProperty {
     return $property.Value
 }
 
+function Get-ManagedRelativePath {
+    param([Parameter(Mandatory = $true)][string]$SourceRelativePath)
+
+    $normalizedSource = $SourceRelativePath.Replace('\', '/')
+    if ($normalizedSource -eq 'rules/CORE.md') {
+        return 'CORE.md'
+    }
+
+    return $normalizedSource
+}
+
 $hubRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $projectRootFull = (Resolve-Path -LiteralPath $ProjectRoot).Path
 $catalogPath = Join-Path $hubRoot 'sync/catalog.json'
@@ -104,50 +113,36 @@ if ($catalog.schemaVersion -ne '0.1') {
     throw "Unsupported catalog schemaVersion: $($catalog.schemaVersion)"
 }
 
-if ([System.IO.Path]::IsPathRooted($ManifestPath)) {
-    $manifestFullPath = [System.IO.Path]::GetFullPath($ManifestPath)
-    $projectPrefix = $projectRootFull.TrimEnd([char[]]@('\', '/')) + [System.IO.Path]::DirectorySeparatorChar
-    if (-not $manifestFullPath.StartsWith($projectPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Manifest must be inside the target project: $ManifestPath"
-    }
-}
-else {
-    $manifestFullPath = Get-SafePath -BasePath $projectRootFull -ChildPath $ManifestPath -Label 'ManifestPath'
-}
+$localRulesRoot = Get-SafePath -BasePath $projectRootFull -ChildPath '.ai-rules' -Label 'local rules directory'
+$manifestFullPath = Join-Path $localRulesRoot 'manifest.json'
+$destinationRoot = Join-Path $localRulesRoot 'upstream'
+$destinationRelative = '.ai-rules/upstream'
+$lockPath = Join-Path $localRulesRoot 'lock.json'
 
 if (-not (Test-Path -LiteralPath $manifestFullPath -PathType Leaf)) {
     throw "Sync manifest was not found: $manifestFullPath"
 }
 
 $manifest = Get-JsonFile -Path $manifestFullPath
-if ($manifest.schemaVersion -ne '0.1') {
+if ($manifest.schemaVersion -ne '0.2') {
     throw "Unsupported manifest schemaVersion: $($manifest.schemaVersion)"
 }
 
-if ([string]::IsNullOrWhiteSpace([string]$manifest.destination)) {
-    throw 'Manifest destination is required.'
+foreach ($requiredProperty in @('source', 'topics', 'profiles')) {
+    if ($null -eq $manifest.PSObject.Properties[$requiredProperty]) {
+        throw "Manifest property is required: $requiredProperty"
+    }
 }
 
-$destinationRoot = Get-SafePath -BasePath $projectRootFull -ChildPath ([string]$manifest.destination) -Label 'destination'
-$destinationRelative = ([string]$manifest.destination).Replace('\', '/').TrimEnd('/')
-if (
-    $destinationRoot -eq $projectRootFull -or
-    $destinationRelative -eq '.git' -or
-    $destinationRelative.StartsWith('.git/', [System.StringComparison]::OrdinalIgnoreCase)
-) {
-    throw "Manifest destination must be a dedicated managed directory outside .git: $($manifest.destination)"
+if ($null -eq $manifest.source.PSObject.Properties['repository']) {
+    throw 'Manifest source.repository is required.'
 }
-
-if (
-    $null -ne $manifest.source -and
-    $null -ne $manifest.source.repository -and
-    -not [string]::IsNullOrWhiteSpace([string]$manifest.source.repository) -and
-    [string]$manifest.source.repository -ne 'ai-rules-hub'
-) {
+if ([string]$manifest.source.repository -ne 'ai-rules-hub') {
     throw "Unsupported source repository: $($manifest.source.repository)"
 }
-
-$lockPath = Join-Path $projectRootFull '.ai-rules-hub.lock.json'
+if ($null -eq $manifest.source.PSObject.Properties['revision']) {
+    throw 'Manifest source.revision is required; use null for an unpinned local preparation.'
+}
 
 $selectedSources = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
 $selectedTopics = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
@@ -215,8 +210,14 @@ $previousLock = $null
 $oldByTarget = @{}
 if (Test-Path -LiteralPath $lockPath -PathType Leaf) {
     $previousLock = Get-JsonFile -Path $lockPath
-    if ($previousLock.schemaVersion -ne '0.1') {
+    if ($previousLock.schemaVersion -ne '0.2') {
         throw "Unsupported lock schemaVersion: $($previousLock.schemaVersion)"
+    }
+    if ([string]$previousLock.manifest -ne '.ai-rules/manifest.json') {
+        throw "Unsupported lock manifest path: $($previousLock.manifest)"
+    }
+    if ([string]$previousLock.managedRoot -ne $destinationRelative) {
+        throw "Unsupported lock managed root: $($previousLock.managedRoot)"
     }
 
     foreach ($entry in @($previousLock.files)) {
@@ -233,9 +234,12 @@ foreach ($sourceRelativePath in @($selectedSources) | Sort-Object) {
         throw "Catalog source does not exist: $sourceRelativePath"
     }
 
-    $targetFullPath = Get-SafePath -BasePath $destinationRoot -ChildPath $sourceRelativePath -Label 'managed target'
+    $managedRelativePath = Get-ManagedRelativePath -SourceRelativePath $sourceRelativePath
+    $targetFullPath = Get-SafePath -BasePath $destinationRoot -ChildPath $managedRelativePath -Label 'managed target'
     $targetRelativePath = Get-RelativePathFromRoot -Root $projectRootFull -Path $targetFullPath
-    [void]$selectedTargets.Add($targetRelativePath)
+    if (-not $selectedTargets.Add($targetRelativePath)) {
+        throw "Multiple catalog sources resolve to the same managed target: $targetRelativePath"
+    }
 
     $sourceHash = Get-Sha256 -Path $sourceFullPath
     $targetHash = $null
@@ -270,7 +274,12 @@ foreach ($oldTarget in @($oldByTarget.Keys) | Sort-Object) {
         continue
     }
 
-    $oldTargetFullPath = Get-SafePath -BasePath $projectRootFull -ChildPath $oldTarget -Label 'locked target'
+    $managedPrefix = $destinationRelative.TrimEnd('/') + '/'
+    if (-not $oldTarget.StartsWith($managedPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Locked target is outside the managed upstream directory: $oldTarget"
+    }
+    $oldManagedRelativePath = $oldTarget.Substring($managedPrefix.Length)
+    $oldTargetFullPath = Get-SafePath -BasePath $destinationRoot -ChildPath $oldManagedRelativePath -Label 'locked target'
     $orphanAction = 'orphan-missing'
     if (Test-Path -LiteralPath $oldTargetFullPath -PathType Leaf) {
         $oldTargetHash = Get-Sha256 -Path $oldTargetFullPath
@@ -295,7 +304,8 @@ foreach ($oldTarget in @($oldByTarget.Keys) | Sort-Object) {
 
 Write-Host "Hub revision: $revision"
 Write-Host "Hub dirty: $sourceDirty"
-Write-Host "Destination: $($manifest.destination)"
+Write-Host "Manifest: .ai-rules/manifest.json"
+Write-Host "Managed root: $destinationRelative"
 $plan | Select-Object Action, Source, Target | Format-Table -AutoSize
 
 $actionOrder = @('add', 'update', 'unchanged', 'conflict', 'orphan', 'orphan-modified', 'orphan-missing')
@@ -352,7 +362,7 @@ if ($null -ne $previousLock -and -not [string]::IsNullOrWhiteSpace([string]$prev
 }
 
 $lockObject = [ordered]@{
-    schemaVersion = '0.1'
+    schemaVersion = '0.2'
     generatedAtUtc = $generatedAtUtc
     source = [ordered]@{
         repository = 'ai-rules-hub'
@@ -360,7 +370,8 @@ $lockObject = [ordered]@{
         dirty = $sourceDirty
         catalogVersion = $catalog.schemaVersion
     }
-    destination = [string]$manifest.destination
+    manifest = '.ai-rules/manifest.json'
+    managedRoot = $destinationRelative
     topics = @($selectedTopics | Sort-Object)
     profiles = @($manifest.profiles | ForEach-Object { [string]$_ } | Sort-Object -Unique)
     files = $lockEntries

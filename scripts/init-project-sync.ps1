@@ -7,14 +7,12 @@ param(
 
     [string[]]$Profiles = @(),
 
-    [string]$Destination = '.ai-rules',
-
     [switch]$SeedProjectFiles
 )
 
 $ErrorActionPreference = 'Stop'
 
-function Test-RelativePathInsideRoot {
+function Get-PathInsideRoot {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
         [Parameter(Mandatory = $true)][string]$RelativePath,
@@ -60,27 +58,34 @@ foreach ($profile in $Profiles) {
     }
 }
 
-[void](Test-RelativePathInsideRoot -Root $projectRootFull -RelativePath $Destination -Label 'Destination')
-$normalizedDestination = $Destination.Replace('\', '/').TrimEnd('/')
-if (
-    $normalizedDestination -eq '.git' -or
-    $normalizedDestination.StartsWith('.git/', [System.StringComparison]::OrdinalIgnoreCase)
-) {
-    throw "Destination must stay outside .git: $Destination"
+$localRulesRoot = Get-PathInsideRoot -Root $projectRootFull -RelativePath '.ai-rules' -Label 'Local rules directory'
+$manifestPath = Join-Path $localRulesRoot 'manifest.json'
+$legacyPaths = @(
+    (Join-Path $projectRootFull '.ai-rules-hub.json'),
+    (Join-Path $projectRootFull '.ai-rules-hub.lock.json')
+)
+
+foreach ($legacyPath in $legacyPaths) {
+    if (Test-Path -LiteralPath $legacyPath) {
+        throw "Legacy sync file detected. Review and migrate it explicitly before initialization: $legacyPath"
+    }
 }
 
-$manifestPath = Join-Path $projectRootFull '.ai-rules-hub.json'
 if (Test-Path -LiteralPath $manifestPath) {
     throw "Sync manifest already exists and will not be overwritten: $manifestPath"
 }
 
+if (-not (Test-Path -LiteralPath $localRulesRoot -PathType Container)) {
+    New-Item -ItemType Directory -Path $localRulesRoot | Out-Null
+    Write-Host "Created directory: $localRulesRoot" -ForegroundColor Green
+}
+
 $manifest = [ordered]@{
-    schemaVersion = '0.1'
+    schemaVersion = '0.2'
     source = [ordered]@{
         repository = 'ai-rules-hub'
         revision = $null
     }
-    destination = $normalizedDestination
     topics = @($Topics | Sort-Object -Unique)
     profiles = @($Profiles | Sort-Object -Unique)
 }
@@ -89,10 +94,15 @@ $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -En
 Write-Host "Created: $manifestPath" -ForegroundColor Green
 
 if ($SeedProjectFiles) {
-    $seedFiles = @('AGENTS.md', 'RULESET.md', 'PROJECT_RULES.md')
+    $seedFiles = @(
+        [pscustomobject]@{ Name = 'AGENTS.md'; TargetRoot = $projectRootFull },
+        [pscustomobject]@{ Name = 'RULESET.md'; TargetRoot = $localRulesRoot },
+        [pscustomobject]@{ Name = 'PROJECT_RULES.md'; TargetRoot = $localRulesRoot }
+    )
+
     foreach ($seedFile in $seedFiles) {
-        $sourcePath = Join-Path $hubRoot "templates/$seedFile"
-        $targetPath = Join-Path $projectRootFull $seedFile
+        $sourcePath = Join-Path $hubRoot "templates/$($seedFile.Name)"
+        $targetPath = Join-Path $seedFile.TargetRoot $seedFile.Name
         if (Test-Path -LiteralPath $targetPath) {
             Write-Host "Skipped existing local file: $targetPath" -ForegroundColor Yellow
             continue

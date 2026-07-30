@@ -2,18 +2,18 @@
 
 ## Зафиксированная версия
 
-- Manifest: `.ai-rules-hub.json`
-- Lock: `.ai-rules-hub.lock.json`
-- Managed rules: `.ai-rules/`
+- Manifest: `.ai-rules/manifest.json`
+- Lock: `.ai-rules/lock.json`
+- Managed rules: `.ai-rules/upstream/`
 - Источник baseline: `<путь или URL к AI Rules Hub>`
 - Commit/version: `<значение source.revision из lock>`
 - Дата принятия: `<YYYY-MM-DD>`
 
-Manifest выбирает topics и profiles. Lock фиксирует фактически применённый revision и нормализованный SHA-256. Этот документ описывает только композицию и явные исключения; обычные правила конкретного проекта находятся в `PROJECT_RULES.md`.
+Manifest выбирает topics и profiles. Lock фиксирует фактически применённый revision и нормализованный SHA-256. Этот документ описывает только композицию и явные исключения; обычные правила конкретного проекта находятся в `.ai-rules/PROJECT_RULES.md`.
 
 ## Обязательный baseline
 
-- `.ai-rules/rules/CORE.md`
+- `.ai-rules/upstream/CORE.md`
 
 ## Выбранные темы
 
@@ -28,7 +28,7 @@ Manifest выбирает topics и profiles. Lock фиксирует факти
 - [ ] Research and evidence
 - [ ] Project study
 
-Отмеченные темы должны совпадать с manifest и фактическим lock:
+Отмеченные темы должны совпадать с manifest и фактическим lock. Файлы тем находятся в `.ai-rules/upstream/rules/`:
 
 - `<путь>`
 
@@ -45,7 +45,7 @@ Manifest выбирает topics и profiles. Lock фиксирует факти
 - Сначала выполнить sync в режиме `Plan`.
 - `conflict` разрешать вручную; не перезаписывать локальную копию автоматически.
 - `orphan` не удалять без проверки входящих ссылок и локальных исключений.
-- После `Apply` просмотреть diff целевого проекта и обновить дату принятия.
+- После `Apply` просмотреть diff `.ai-rules/upstream/` и `.ai-rules/lock.json`, затем обновить дату принятия.
 
 ## Явные исключения
 
