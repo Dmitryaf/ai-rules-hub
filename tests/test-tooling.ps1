@@ -95,6 +95,7 @@ try {
     $initializerPath = Join-Path $hubRoot 'scripts/init-project-sync.ps1'
     $initResult = Invoke-HubScript -ScriptPath $initializerPath -Arguments @(
         '-ProjectRoot', $projectRoot,
+        '-Topics', 'project-study',
         '-Profiles', 'standard-product',
         '-SeedProjectFiles'
     )
@@ -120,6 +121,7 @@ try {
     Assert-True -Condition (Test-Path -LiteralPath $managedCorePath) -Message 'sync must copy core'
     Assert-True -Condition (Test-Path -LiteralPath $managedProfilePath) -Message 'sync must copy selected profile'
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $projectRoot '.ai-rules/rules/PRODUCT.md')) -Message 'profile must pull topic dependencies'
+    Assert-True -Condition (Test-Path -LiteralPath (Join-Path $projectRoot '.ai-rules/rules/PROJECT_STUDY.md')) -Message 'sync must copy explicitly selected project-study topic'
     $lockPath = Join-Path $projectRoot '.ai-rules-hub.lock.json'
     Assert-True -Condition (Test-Path -LiteralPath $lockPath) -Message 'apply must create lock'
     Assert-True -Condition ((Get-Content -LiteralPath (Join-Path $projectRoot 'AGENTS.md') -Raw -Encoding UTF8).Trim() -eq '# Local agent rules') -Message 'apply must not overwrite local AGENTS.md'

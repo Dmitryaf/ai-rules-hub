@@ -15,6 +15,7 @@
 | [`GIT_AND_DELIVERY.md`](GIT_AND_DELIVERY.md) | ветки, коммиты, CI/CD, релиз или внешняя операция |
 | [`AI_COLLABORATION.md`](AI_COLLABORATION.md) | распределение работы между человеком и AI, менторский режим |
 | [`RESEARCH_AND_EVIDENCE.md`](RESEARCH_AND_EVIDENCE.md) | неизвестный API, исследование, эксперимент, аудит или доказательная рекомендация |
+| [`PROJECT_STUDY.md`](PROJECT_STUDY.md) | создание или обновление подробной учебной документации по существующему проекту |
 
 ## Приоритет правил
 

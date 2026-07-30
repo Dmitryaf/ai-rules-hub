@@ -10,7 +10,8 @@
     "documentation": "rules/DOCUMENTATION.md",
     "git-and-delivery": "rules/GIT_AND_DELIVERY.md",
     "ai-collaboration": "rules/AI_COLLABORATION.md",
-    "research-and-evidence": "rules/RESEARCH_AND_EVIDENCE.md"
+    "research-and-evidence": "rules/RESEARCH_AND_EVIDENCE.md",
+    "project-study": "rules/PROJECT_STUDY.md"
   },
   "profiles": {
     "standard-product": {

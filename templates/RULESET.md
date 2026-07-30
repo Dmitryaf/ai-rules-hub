@@ -26,6 +26,7 @@ Manifest выбирает topics и profiles. Lock фиксирует факти
 - [ ] Git and delivery
 - [ ] AI collaboration
 - [ ] Research and evidence
+- [ ] Project study
 
 Отмеченные темы должны совпадать с manifest и фактическим lock:
 
