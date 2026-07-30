@@ -197,6 +197,9 @@ if ($null -ne $manifest.source -and $null -ne $manifest.source.revision) {
 }
 
 if (-not [string]::IsNullOrWhiteSpace($expectedRevision)) {
+    if ($expectedRevision -notmatch '^[0-9a-fA-F]{40}$') {
+        throw 'Manifest source.revision must be a full 40-character Git commit SHA.'
+    }
     if ([string]::IsNullOrWhiteSpace($revision)) {
         throw 'Manifest pins a revision, but the hub Git revision cannot be determined.'
     }
@@ -295,7 +298,25 @@ Write-Host "Hub dirty: $sourceDirty"
 Write-Host "Destination: $($manifest.destination)"
 $plan | Select-Object Action, Source, Target | Format-Table -AutoSize
 
+$actionOrder = @('add', 'update', 'unchanged', 'conflict', 'orphan', 'orphan-modified', 'orphan-missing')
+$summaryParts = @(
+    foreach ($actionName in $actionOrder) {
+        $count = @($plan | Where-Object { $_.Action -eq $actionName }).Count
+        if ($count -gt 0) {
+            "${actionName}=$count"
+        }
+    }
+)
+Write-Host "Summary: $($summaryParts -join ', ')"
+
 if ($Mode -eq 'Plan') {
+    Write-Host 'Plan only: no project files were changed.' -ForegroundColor Green
+    if (@($plan | Where-Object { $_.Action -eq 'conflict' }).Count -gt 0) {
+        Write-Host 'Resolve managed-file conflicts before Apply.' -ForegroundColor Yellow
+    }
+    else {
+        Write-Host 'Next: review this plan and the selected revision, then run the same command with -Mode Apply.'
+    }
     exit 0
 }
 
@@ -325,9 +346,14 @@ $lockEntries = @(
         }
 )
 
+$generatedAtUtc = [DateTime]::UtcNow.ToString('o')
+if ($null -ne $previousLock -and -not [string]::IsNullOrWhiteSpace([string]$previousLock.generatedAtUtc)) {
+    $generatedAtUtc = [string]$previousLock.generatedAtUtc
+}
+
 $lockObject = [ordered]@{
     schemaVersion = '0.1'
-    generatedAtUtc = [DateTime]::UtcNow.ToString('o')
+    generatedAtUtc = $generatedAtUtc
     source = [ordered]@{
         repository = 'ai-rules-hub'
         revision = $revision
@@ -341,6 +367,22 @@ $lockObject = [ordered]@{
 }
 
 $lockJson = $lockObject | ConvertTo-Json -Depth 10
-Set-Content -LiteralPath $lockPath -Value $lockJson -Encoding UTF8
+$lockChanged = $true
+if (Test-Path -LiteralPath $lockPath -PathType Leaf) {
+    $existingLockJson = [System.IO.File]::ReadAllText($lockPath).TrimEnd([char[]]@("`r", "`n"))
+    if ($existingLockJson -eq $lockJson.TrimEnd([char[]]@("`r", "`n"))) {
+        $lockChanged = $false
+    }
+}
 
-Write-Host "Sync applied. Lock updated: $lockPath" -ForegroundColor Green
+if ($lockChanged) {
+    $lockObject.generatedAtUtc = [DateTime]::UtcNow.ToString('o')
+    $lockJson = $lockObject | ConvertTo-Json -Depth 10
+    Set-Content -LiteralPath $lockPath -Value $lockJson -Encoding UTF8
+    Write-Host "Lock updated: $lockPath" -ForegroundColor Green
+}
+else {
+    Write-Host "Lock unchanged: $lockPath" -ForegroundColor Green
+}
+
+Write-Host 'Sync applied.' -ForegroundColor Green

@@ -16,6 +16,7 @@ AI Rules Hub — база переносимых правил для разра�
 - Для выбора готового набора: [`profiles/README.md`](profiles/README.md).
 - Для синхронизации принятого набора: [`sync/README.md`](sync/README.md).
 - Для понимания происхождения правил: [`hub/SOURCE_PROVENANCE.md`](hub/SOURCE_PROVENANCE.md).
+- Для отложенных направлений после пилотных подключений: [`hub/BACKLOG.md`](hub/BACKLOG.md).
 
 ## Структура
 

@@ -21,6 +21,22 @@ function Assert-True {
     $script:assertionCount++
 }
 
+function Get-NormalizedSha256 {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $content = [System.IO.File]::ReadAllText($Path).Replace("`r`n", "`n").Replace("`r", "`n")
+    $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
+    $bytes = $utf8WithoutBom.GetBytes($content)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hashBytes = $sha256.ComputeHash($bytes)
+        return (($hashBytes | ForEach-Object { $_.ToString('x2') }) -join '')
+    }
+    finally {
+        $sha256.Dispose()
+    }
+}
+
 function Invoke-HubScript {
     param(
         [Parameter(Mandatory = $true)][string]$ScriptPath,
@@ -71,9 +87,10 @@ try {
     Assert-True -Condition ($validHookExitCode -eq 0) -Message 'repository commit-msg hook must invoke validator'
     Assert-True -Condition ($invalidHookExitCode -ne 0) -Message 'repository commit-msg hook must reject invalid message'
 
-    $projectRoot = Join-Path $tempRoot 'target-project'
+    $projectRoot = Join-Path $tempRoot 'target project with spaces'
     New-Item -ItemType Directory -Path $projectRoot | Out-Null
     Set-Content -LiteralPath (Join-Path $projectRoot 'AGENTS.md') -Value '# Local agent rules' -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $projectRoot 'PROJECT_RULES.md') -Value '# Local project rules' -Encoding UTF8
 
     $initializerPath = Join-Path $hubRoot 'scripts/init-project-sync.ps1'
     $initResult = Invoke-HubScript -ScriptPath $initializerPath -Arguments @(
@@ -84,9 +101,17 @@ try {
     Assert-True -Condition ($initResult.ExitCode -eq 0) -Message "initializer must pass: $($initResult.Output)"
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $projectRoot '.ai-rules-hub.json')) -Message 'initializer must create manifest'
     Assert-True -Condition ((Get-Content -LiteralPath (Join-Path $projectRoot 'AGENTS.md') -Raw -Encoding UTF8).Trim() -eq '# Local agent rules') -Message 'initializer must not overwrite local AGENTS.md'
+    Assert-True -Condition ((Get-Content -LiteralPath (Join-Path $projectRoot 'PROJECT_RULES.md') -Raw -Encoding UTF8).Trim() -eq '# Local project rules') -Message 'initializer must not overwrite local PROJECT_RULES.md'
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $projectRoot 'RULESET.md')) -Message 'initializer must seed missing RULESET.md'
 
     $syncPath = Join-Path $hubRoot 'scripts/sync-rules.ps1'
+    $initialPlan = Invoke-HubScript -ScriptPath $syncPath -Arguments @('-ProjectRoot', $projectRoot, '-Mode', 'Plan')
+    Assert-True -Condition ($initialPlan.ExitCode -eq 0) -Message "initial plan must pass for a path with spaces: $($initialPlan.Output)"
+    Assert-True -Condition ($initialPlan.Output -match 'Plan only: no project files were changed') -Message 'plan must explain that it is read-only'
+    Assert-True -Condition ($initialPlan.Output -match 'Summary: add=') -Message 'plan must print an action summary'
+    Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $projectRoot '.ai-rules'))) -Message 'plan must not create managed directory'
+    Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $projectRoot '.ai-rules-hub.lock.json'))) -Message 'plan must not create lock'
+
     $applyResult = Invoke-HubScript -ScriptPath $syncPath -Arguments @('-ProjectRoot', $projectRoot, '-Mode', 'Apply')
     Assert-True -Condition ($applyResult.ExitCode -eq 0) -Message "first sync apply must pass: $($applyResult.Output)"
 
@@ -95,11 +120,29 @@ try {
     Assert-True -Condition (Test-Path -LiteralPath $managedCorePath) -Message 'sync must copy core'
     Assert-True -Condition (Test-Path -LiteralPath $managedProfilePath) -Message 'sync must copy selected profile'
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $projectRoot '.ai-rules/rules/PRODUCT.md')) -Message 'profile must pull topic dependencies'
-    Assert-True -Condition (Test-Path -LiteralPath (Join-Path $projectRoot '.ai-rules-hub.lock.json')) -Message 'apply must create lock'
+    $lockPath = Join-Path $projectRoot '.ai-rules-hub.lock.json'
+    Assert-True -Condition (Test-Path -LiteralPath $lockPath) -Message 'apply must create lock'
+    Assert-True -Condition ((Get-Content -LiteralPath (Join-Path $projectRoot 'AGENTS.md') -Raw -Encoding UTF8).Trim() -eq '# Local agent rules') -Message 'apply must not overwrite local AGENTS.md'
+    Assert-True -Condition ((Get-Content -LiteralPath (Join-Path $projectRoot 'PROJECT_RULES.md') -Raw -Encoding UTF8).Trim() -eq '# Local project rules') -Message 'apply must not overwrite local PROJECT_RULES.md'
+
+    $lock = Get-Content -LiteralPath $lockPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $hubRevision = (& git -C $hubRoot rev-parse HEAD).Trim()
+    Assert-True -Condition ($lock.source.revision -eq $hubRevision) -Message 'lock must contain exact hub revision'
+    Assert-True -Condition ($lock.source.revision -match '^[0-9a-f]{40}$') -Message 'lock revision must be a full commit SHA'
+    $coreLockEntry = @($lock.files | Where-Object { $_.target -eq '.ai-rules/rules/CORE.md' })[0]
+    Assert-True -Condition ($null -ne $coreLockEntry) -Message 'lock must contain managed core entry'
+    Assert-True -Condition ($coreLockEntry.sha256 -eq (Get-NormalizedSha256 -Path $managedCorePath)) -Message 'lock must contain normalized managed-file SHA-256'
 
     $secondPlan = Invoke-HubScript -ScriptPath $syncPath -Arguments @('-ProjectRoot', $projectRoot, '-Mode', 'Plan')
     Assert-True -Condition ($secondPlan.ExitCode -eq 0) -Message 'second plan must pass'
     Assert-True -Condition ($secondPlan.Output -match 'unchanged') -Message 'second plan must report unchanged files'
+
+    $lockBeforeSecondApply = [System.IO.File]::ReadAllText($lockPath)
+    $secondApply = Invoke-HubScript -ScriptPath $syncPath -Arguments @('-ProjectRoot', $projectRoot, '-Mode', 'Apply')
+    $lockAfterSecondApply = [System.IO.File]::ReadAllText($lockPath)
+    Assert-True -Condition ($secondApply.ExitCode -eq 0) -Message "second apply must pass: $($secondApply.Output)"
+    Assert-True -Condition ($secondApply.Output -match 'Lock unchanged') -Message 'idempotent apply must report unchanged lock'
+    Assert-True -Condition ($lockAfterSecondApply -eq $lockBeforeSecondApply) -Message 'idempotent apply must not rewrite lock content'
 
     $coreText = [System.IO.File]::ReadAllText($managedCorePath).Replace("`r`n", "`n").Replace("`r", "`n")
     $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
@@ -116,6 +159,7 @@ try {
 
     $manifestPath = Join-Path $projectRoot '.ai-rules-hub.json'
     $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    Add-Content -LiteralPath $managedProfilePath -Value "`nlocal profile change" -Encoding UTF8
     $manifest.profiles = @()
     $manifest.topics = @()
     $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
@@ -123,10 +167,16 @@ try {
     $orphanPlan = Invoke-HubScript -ScriptPath $syncPath -Arguments @('-ProjectRoot', $projectRoot, '-Mode', 'Plan')
     Assert-True -Condition ($orphanPlan.ExitCode -eq 0) -Message 'orphan plan must remain read-only and pass'
     Assert-True -Condition ($orphanPlan.Output -match 'orphan') -Message 'removed selection must report orphan files'
+    Assert-True -Condition ($orphanPlan.Output -match 'orphan-modified') -Message 'locally changed deselected file must report orphan-modified'
 
     $orphanApply = Invoke-HubScript -ScriptPath $syncPath -Arguments @('-ProjectRoot', $projectRoot, '-Mode', 'Apply')
     Assert-True -Condition ($orphanApply.ExitCode -eq 0) -Message 'apply must preserve safe orphan files'
     Assert-True -Condition (Test-Path -LiteralPath $managedProfilePath) -Message 'apply must not delete orphan file'
+    Assert-True -Condition ((Get-Content -LiteralPath $managedProfilePath -Raw -Encoding UTF8) -match 'local profile change') -Message 'apply must preserve modified orphan content'
+
+    $orphanLock = Get-Content -LiteralPath $lockPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $profileLockEntry = @($orphanLock.files | Where-Object { $_.target -eq '.ai-rules/profiles/standard-product.md' })[0]
+    Assert-True -Condition ($profileLockEntry.state -eq 'orphan') -Message 'lock must retain deselected file as orphan'
 
     $postApplyOrphanPlan = Invoke-HubScript -ScriptPath $syncPath -Arguments @('-ProjectRoot', $projectRoot, '-Mode', 'Plan')
     Assert-True -Condition ($postApplyOrphanPlan.Output -match 'orphan') -Message 'lock must retain orphan state after apply'
@@ -135,6 +185,13 @@ try {
     $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
     $escapePlan = Invoke-HubScript -ScriptPath $syncPath -Arguments @('-ProjectRoot', $projectRoot, '-Mode', 'Plan')
     Assert-True -Condition ($escapePlan.ExitCode -ne 0) -Message 'destination path traversal must fail'
+
+    $manifest.destination = '.ai-rules'
+    $manifest.source.revision = '1234567'
+    $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+    $shortRevisionPlan = Invoke-HubScript -ScriptPath $syncPath -Arguments @('-ProjectRoot', $projectRoot, '-Mode', 'Plan')
+    Assert-True -Condition ($shortRevisionPlan.ExitCode -ne 0) -Message 'short source revision must fail'
+    Assert-True -Condition ($shortRevisionPlan.Output -match 'full 40-character Git commit SHA') -Message 'invalid revision error must explain the required format'
 
     Write-Host "Tooling tests passed: $assertionCount assertions." -ForegroundColor Green
 }
