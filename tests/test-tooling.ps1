@@ -293,3 +293,5 @@ finally {
         Write-Warning "Temporary directory was not removed because its path failed safety validation: $tempRootFull"
     }
 }
+
+exit 0
