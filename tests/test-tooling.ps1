@@ -65,6 +65,12 @@ try {
     $agentsTemplate = Get-Content -LiteralPath (Join-Path $hubRoot 'templates/AGENTS.md') -Raw -Encoding UTF8
     $projectRulesTemplate = Get-Content -LiteralPath (Join-Path $hubRoot 'templates/PROJECT_RULES.md') -Raw -Encoding UTF8
     $standardProductProfile = Get-Content -LiteralPath (Join-Path $hubRoot 'profiles/standard-product.md') -Raw -Encoding UTF8
+    $publicRepositoryProfile = Get-Content -LiteralPath (Join-Path $hubRoot 'profiles/public-repository.md') -Raw -Encoding UTF8
+    $securityRule = Get-Content -LiteralPath (Join-Path $hubRoot 'rules/SECURITY_AND_PRIVACY.md') -Raw -Encoding UTF8
+    $deliveryRule = Get-Content -LiteralPath (Join-Path $hubRoot 'rules/GIT_AND_DELIVERY.md') -Raw -Encoding UTF8
+    $hubProjectRules = Get-Content -LiteralPath (Join-Path $hubRoot 'hub/PROJECT_RULES.md') -Raw -Encoding UTF8
+    $validationWorkflow = Get-Content -LiteralPath (Join-Path $hubRoot '.github/workflows/validate.yml') -Raw -Encoding UTF8
+    $hubCheck = Get-Content -LiteralPath (Join-Path $hubRoot 'scripts/check-hub.ps1') -Raw -Encoding UTF8
 
     Assert-True -Condition ($documentationRule -match 'docs/README\.md' -and $documentationRule -match 'docs/research/' -and $documentationRule -match 'docs/archive/') -Message 'documentation rule must define index, research, and archive roles'
     Assert-True -Condition ($documentationRule -match '(?s)PRODUCT\.md.*ARCHITECTURE\.md.*ROADMAP\.md') -Message 'documentation rule must define canonical current-state documents'
@@ -73,6 +79,13 @@ try {
     Assert-True -Condition ($agentsTemplate -match 'PROJECT_RULES\.md' -and $agentsTemplate -match 'docs/README\.md') -Message 'agent template must route documentation through project rules and index'
     Assert-True -Condition ($projectRulesTemplate -match 'docs/README\.md' -and $projectRulesTemplate -match '\|.*\|.*\|') -Message 'project rules template must keep documentation as links and task routing'
     Assert-True -Condition ($standardProductProfile -match '\.\./rules/DOCUMENTATION\.md' -and $standardProductProfile -match 'docs/README\.md') -Message 'standard-product must include documentation rule and recommend an index'
+    Assert-True -Condition ($hubProjectRules -match '\.\./profiles/public-repository\.md' -and $hubProjectRules -match 'maintainer-led') -Message 'hub project rules must apply the public repository profile explicitly'
+    Assert-True -Condition ($publicRepositoryProfile -match 'LICENSE|license' -and $publicRepositoryProfile -match 'third-party' -and $publicRepositoryProfile -match 'contributions' -and $publicRepositoryProfile -match 'Repository settings') -Message 'public repository profile must cover licensing, provenance, contributions, and settings'
+    Assert-True -Condition ($securityRule -match 'Issues' -and $securityRule -match 'AGENTS\.md' -and $securityRule -match 'connector context') -Message 'security rule must treat public input and agent instructions as trust-boundary concerns'
+    Assert-True -Condition ($deliveryRule -match 'GitHub Actions' -and $deliveryRule -match 'commit SHA' -and $deliveryRule -match 'pull_request_target' -and $deliveryRule -match 'workflow_run') -Message 'delivery rule must define safe GitHub Actions defaults'
+    Assert-True -Condition ($validationWorkflow -match '(?m)^permissions:\s*\r?\n\s+contents:\s*read\s*$' -and $validationWorkflow -match 'actions/checkout@[0-9a-f]{40}' -and $validationWorkflow -match 'persist-credentials:\s*false') -Message 'validation workflow must be read-only and use pinned checkout without persisted credentials'
+    Assert-True -Condition ((Test-Path -LiteralPath (Join-Path $hubRoot 'CONTRIBUTING.md')) -and (Test-Path -LiteralPath (Join-Path $hubRoot '.github/SECURITY.md'))) -Message 'public repository entry points must exist'
+    Assert-True -Condition ($hubCheck -match 'LICENSE\.md' -and $hubCheck -match 'GitHub-discoverable CONTRIBUTING' -and $hubCheck -match 'full 40-character commit SHA') -Message 'hub check must enforce public repository hygiene'
 
     $validatorPath = Join-Path $hubRoot 'scripts/validate-commit-message.ps1'
     $validMessagePath = Join-Path $tempRoot 'valid-message.txt'

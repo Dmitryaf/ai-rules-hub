@@ -16,6 +16,8 @@ function Get-RepoRelativePath {
 $requiredPaths = @(
     'AGENTS.md',
     'README.md',
+    'CONTRIBUTING.md',
+    '.github/SECURITY.md',
     'rules/README.md',
     'rules/CORE.md',
     'hub/PROJECT_RULES.md',
@@ -39,6 +41,61 @@ foreach ($requiredPath in $requiredPaths) {
     $absolutePath = Join-Path $repoRoot $requiredPath
     if (-not (Test-Path -LiteralPath $absolutePath)) {
         $errors.Add("Missing required path: $requiredPath")
+    }
+}
+
+$licenseCandidates = @('LICENSE', 'LICENSE.md', 'LICENSE.txt')
+if (-not ($licenseCandidates | Where-Object { Test-Path -LiteralPath (Join-Path $repoRoot $_) -PathType Leaf })) {
+    $errors.Add('Public repository has no root LICENSE, LICENSE.md, or LICENSE.txt. License selection requires an explicit owner decision.')
+}
+
+$githubContributingCandidates = @('CONTRIBUTING.md', '.github/CONTRIBUTING.md')
+if (-not ($githubContributingCandidates | Where-Object { Test-Path -LiteralPath (Join-Path $repoRoot $_) -PathType Leaf })) {
+    $errors.Add('Public repository has no GitHub-discoverable CONTRIBUTING.md.')
+}
+
+$securityPolicyPath = Join-Path $repoRoot '.github/SECURITY.md'
+if (-not (Test-Path -LiteralPath $securityPolicyPath -PathType Leaf)) {
+    $errors.Add('Public repository has no .github/SECURITY.md.')
+}
+
+$workflowRoot = Join-Path $repoRoot '.github/workflows'
+if (Test-Path -LiteralPath $workflowRoot -PathType Container) {
+    $workflowFiles = Get-ChildItem -LiteralPath $workflowRoot -File |
+        Where-Object { $_.Extension -in @('.yml', '.yaml') }
+
+    foreach ($workflowFile in $workflowFiles) {
+        $workflowRelativePath = Get-RepoRelativePath -Path $workflowFile.FullName
+        $workflowContent = Get-Content -LiteralPath $workflowFile.FullName -Raw -Encoding UTF8
+
+        if ($workflowContent -notmatch '(?m)^permissions:\s*\r?\n(?:(?:^[ \t]+[^\r\n]*\r?\n)*)^[ \t]+contents:\s*read\s*(?:#.*)?$') {
+            $errors.Add("Workflow must declare top-level read-only contents permission: $workflowRelativePath")
+        }
+        if ($workflowContent -match '(?im)^\s*permissions:\s*write-all\s*(?:#.*)?$' -or $workflowContent -match '(?im)^\s*[a-z][a-z-]*:\s*write\s*(?:#.*)?$') {
+            $errors.Add("Workflow must not declare write permissions: $workflowRelativePath")
+        }
+
+        foreach ($actionMatch in [regex]::Matches($workflowContent, '(?m)^\s*(?:-\s*)?uses:\s*(?<reference>[^\s#]+)')) {
+            $actionReference = $actionMatch.Groups['reference'].Value
+            if ($actionReference.StartsWith('./') -or $actionReference.StartsWith('.\\')) {
+                continue
+            }
+
+            if ($actionReference.StartsWith('docker://')) {
+                if ($actionReference -notmatch '^docker://[^@\s]+@sha256:[0-9a-fA-F]{64}$') {
+                    $errors.Add("Docker action must be pinned by sha256 digest in ${workflowRelativePath}: $actionReference")
+                }
+                continue
+            }
+
+            if ($actionReference -notmatch '^[^@\s]+@[0-9a-fA-F]{40}$') {
+                $errors.Add("Action must be pinned to a full 40-character commit SHA in ${workflowRelativePath}: $actionReference")
+            }
+        }
+
+        if ($workflowContent -match 'uses:\s*actions/checkout@' -and $workflowContent -notmatch '(?m)^\s+persist-credentials:\s*false\s*(?:#.*)?$') {
+            $errors.Add("actions/checkout must disable persisted credentials in $workflowRelativePath")
+        }
     }
 }
 
