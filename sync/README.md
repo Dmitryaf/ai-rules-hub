@@ -77,6 +77,7 @@ project/
 - Исключённый из manifest upstream-файл получает состояние `orphan`, `orphan-modified` или `orphan-missing`. Версия `0.2` не удаляет orphan-файлы автоматически.
 - `Plan` ничего не записывает.
 - Повторный `Apply` при неизменном составе не переписывает upstream-файлы и lock.
+- Каждый Markdown-файл темы из `rules/`, кроме `CORE.md` и `README.md`, регистрируется ровно одним topic ID в catalog.
 
 ## 1. Первичное подключение
 
@@ -151,6 +152,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 6. релевантные проектные документы, код и тесты.
 
 Точный состав определяется manifest, lock и status. Не читать весь `upstream/` или все темы профиля перед каждой задачей. `PROJECT_STUDY.md` применяется только при явном выборе темы и соответствующей задаче. Общие правила не редактируются внутри проекта; проектная специфика меняется в `.ai-rules/PROJECT_RULES.md`, исключения — в `.ai-rules/RULESET.md`.
+
+Если profiles выбраны, корневой `AGENTS.md` должен содержать общий маршрут `.ai-rules/upstream/profiles/` либо явные пути ко всем выбранным profile-файлам. После pinning отсутствие этого маршрута делает подключение inconsistent.
+
+Read-only `update` из dirty checkout строит preview по рабочим файлам, а не только по commit snapshot, и явно сообщает базовый HEAD SHA. Такой preview нельзя применить: сначала нужно сохранить или отменить изменения хаба и повторить preview. `update -Apply` из dirty checkout остаётся запрещённым.
 
 ## 5. Обновление общих правил
 
