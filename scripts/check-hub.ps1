@@ -50,7 +50,7 @@ foreach ($requiredPath in $requiredPaths) {
 
 $forbiddenPublicPaths = @(
     'hub/BACKLOG.md',
-    'hub/decisions/0001-layered-ruleset.md'
+    'hub/decisions'
 )
 foreach ($forbiddenPublicPath in $forbiddenPublicPaths) {
     if (Test-Path -LiteralPath (Join-Path $repoRoot $forbiddenPublicPath)) {
