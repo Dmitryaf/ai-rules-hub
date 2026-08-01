@@ -230,21 +230,71 @@ function Get-RevisionRelation {
     }
 }
 
-function Get-MissingAgentRoutes {
-    param([Parameter(Mandatory = $true)][string]$Content)
-
-    $requiredRoutes = @('.ai-rules/RULESET.md', '.ai-rules/PROJECT_RULES.md', '.ai-rules/upstream/CORE.md')
-    return @($requiredRoutes | Where-Object { -not $Content.Contains($_) })
-}
-
-function Test-RulesetToken {
+function Get-AgentRouteState {
     param(
         [Parameter(Mandatory = $true)][string]$Content,
-        [Parameter(Mandatory = $true)][string]$Id
+        [string[]]$SelectedProfiles = @()
     )
 
-    $pattern = '(?<![A-Za-z0-9_-])' + [regex]::Escape($Id) + '(?![A-Za-z0-9_-])'
-    return [regex]::IsMatch($Content, $pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    $requiredRoutes = @('.ai-rules/RULESET.md', '.ai-rules/PROJECT_RULES.md', '.ai-rules/upstream/CORE.md')
+    $missingRequiredRoutes = @($requiredRoutes | Where-Object { -not $Content.Contains($_) })
+    $profiles = @(
+        $SelectedProfiles |
+            ForEach-Object { [string]$_ } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Sort-Object -Unique
+    )
+    $generalProfileRoutePattern = [regex]::Escape('.ai-rules/upstream/profiles/') + '(?![A-Za-z0-9_.-])'
+    $hasGeneralProfileRoute = [regex]::IsMatch($Content, $generalProfileRoutePattern)
+    $missingProfileRoutes = @()
+    if ($profiles.Count -gt 0 -and -not $hasGeneralProfileRoute) {
+        $missingProfileRoutes = @(
+            foreach ($profile in $profiles) {
+                $route = ".ai-rules/upstream/profiles/$profile.md"
+                if (-not $Content.Contains($route)) {
+                    $route
+                }
+            }
+        )
+    }
+
+    return [pscustomobject]@{
+        RequiredRoutes = $requiredRoutes
+        MissingRequiredRoutes = $missingRequiredRoutes
+        ProfileRoutingRequired = $profiles.Count -gt 0
+        ProfileRoutingPresent = $profiles.Count -eq 0 -or $hasGeneralProfileRoute -or $missingProfileRoutes.Count -eq 0
+        MissingProfileRoutes = $missingProfileRoutes
+    }
+}
+
+function Get-RulesetSection {
+    param(
+        [Parameter(Mandatory = $true)][string]$Content,
+        [Parameter(Mandatory = $true)][string]$Heading
+    )
+
+    $pattern = '(?ms)^## ' + [regex]::Escape($Heading) + '[ \t]*(?:\r?\n(?<body>.*?)(?=^## |\z)|\z)'
+    $match = [regex]::Match($Content, $pattern)
+    return [pscustomobject]@{
+        Found = $match.Success
+        Content = if ($match.Success) { $match.Groups['body'].Value } else { '' }
+    }
+}
+
+function Get-RulesetSectionIds {
+    param([Parameter(Mandatory = $true)][string]$Content)
+
+    $ids = [System.Collections.Generic.List[string]]::new()
+    foreach ($line in ($Content -split '\r?\n')) {
+        $match = [regex]::Match($line, '^\s*-\s*`(?<id>[A-Za-z0-9_-]+)`(?:\s|—|-|$)')
+        if (-not $match.Success) {
+            $match = [regex]::Match($line, '^\s*-\s*(?<id>[A-Za-z0-9][A-Za-z0-9_-]*)(?:\s|—|-|$)')
+        }
+        if ($match.Success) {
+            $ids.Add($match.Groups['id'].Value)
+        }
+    }
+    return @($ids | Sort-Object -Unique)
 }
 
 function Get-RulesetConsistencyResults {
@@ -257,22 +307,36 @@ function Get-RulesetConsistencyResults {
     $results = [System.Collections.Generic.List[object]]::new()
     $selectedProfiles = @($Manifest.profiles | ForEach-Object { [string]$_ })
     $selectedTopics = @($Manifest.topics | ForEach-Object { [string]$_ })
-    foreach ($profileId in @($Catalog.profiles.PSObject.Properties.Name)) {
-        $mentioned = Test-RulesetToken -Content $Content -Id $profileId
-        if ($profileId -in $selectedProfiles -and -not $mentioned) {
-            $results.Add([pscustomobject]@{ Level = 'WARN'; Message = "Профиль $profileId выбран в manifest, но не объяснён в RULESET.md." })
-        }
-        elseif ($profileId -notin $selectedProfiles -and $mentioned) {
-            $results.Add([pscustomobject]@{ Level = 'WARN'; Message = "RULESET.md упоминает $profileId, но этот профиль не выбран в manifest." })
+    $profileSection = Get-RulesetSection -Content $Content -Heading 'Выбранные профили'
+    $topicSection = Get-RulesetSection -Content $Content -Heading 'Дополнительные темы'
+
+    if (-not $profileSection.Found -and $selectedProfiles.Count -gt 0) {
+        $results.Add([pscustomobject]@{ Level = 'WARN'; Message = 'RULESET.md не содержит секцию «Выбранные профили» для profiles из manifest.' })
+    }
+    elseif ($profileSection.Found) {
+        $profileIds = @(Get-RulesetSectionIds -Content $profileSection.Content)
+        foreach ($profileId in @($Catalog.profiles.PSObject.Properties.Name)) {
+            if ($profileId -in $selectedProfiles -and $profileId -notin $profileIds) {
+                $results.Add([pscustomobject]@{ Level = 'WARN'; Message = "Профиль $profileId выбран в manifest, но не объяснён в секции «Выбранные профили»." })
+            }
+            elseif ($profileId -notin $selectedProfiles -and $profileId -in $profileIds) {
+                $results.Add([pscustomobject]@{ Level = 'WARN'; Message = "Секция «Выбранные профили» содержит $profileId, но этот профиль не выбран в manifest." })
+            }
         }
     }
-    foreach ($topicId in @($Catalog.topics.PSObject.Properties.Name)) {
-        $mentioned = Test-RulesetToken -Content $Content -Id $topicId
-        if ($topicId -in $selectedTopics -and -not $mentioned) {
-            $results.Add([pscustomobject]@{ Level = 'WARN'; Message = "Тема $topicId выбрана напрямую, но не объяснена в RULESET.md." })
-        }
-        elseif ($topicId -notin $selectedTopics -and $mentioned) {
-            $results.Add([pscustomobject]@{ Level = 'WARN'; Message = "RULESET.md упоминает $topicId, но эта тема не выбрана напрямую в manifest." })
+
+    if (-not $topicSection.Found -and $selectedTopics.Count -gt 0) {
+        $results.Add([pscustomobject]@{ Level = 'WARN'; Message = 'RULESET.md не содержит секцию «Дополнительные темы» для topics из manifest.' })
+    }
+    elseif ($topicSection.Found) {
+        $topicIds = @(Get-RulesetSectionIds -Content $topicSection.Content)
+        foreach ($topicId in @($Catalog.topics.PSObject.Properties.Name)) {
+            if ($topicId -in $selectedTopics -and $topicId -notin $topicIds) {
+                $results.Add([pscustomobject]@{ Level = 'WARN'; Message = "Тема $topicId выбрана напрямую, но не объяснена в секции «Дополнительные темы»." })
+            }
+            elseif ($topicId -notin $selectedTopics -and $topicId -in $topicIds) {
+                $results.Add([pscustomobject]@{ Level = 'WARN'; Message = "Секция «Дополнительные темы» содержит $topicId, но эта тема не выбрана напрямую в manifest." })
+            }
         }
     }
     return @($results)
@@ -697,9 +761,12 @@ function Show-Status {
         }
         else {
             $agentsContent = Get-Content -LiteralPath $agentsPath -Raw -Encoding UTF8
-            $missingRoutes = Get-MissingAgentRoutes -Content $agentsContent
-            if ($missingRoutes.Count -gt 0) {
-                $diagnostics.Add("закреплённый проект не подключает обязательные маршруты AI Rules Hub: $($missingRoutes -join ', ').")
+            $routeState = Get-AgentRouteState -Content $agentsContent -SelectedProfiles $profiles
+            if ($routeState.MissingRequiredRoutes.Count -gt 0) {
+                $diagnostics.Add("закреплённый проект не подключает обязательные маршруты AI Rules Hub: $($routeState.MissingRequiredRoutes -join ', ').")
+            }
+            if (-not $routeState.ProfileRoutingPresent) {
+                $diagnostics.Add("закреплённый проект не подключает выбранные профили AI Rules Hub: $($profiles -join ', ').")
             }
         }
         if (-not (Test-Path -LiteralPath $rulesetPath -PathType Leaf)) {
@@ -942,21 +1009,33 @@ function Invoke-ProjectDoctor {
 
     if (Test-Path -LiteralPath $agentsPath -PathType Leaf) {
         $agentsContent = Get-Content -LiteralPath $agentsPath -Raw -Encoding UTF8
-        $routes = @('.ai-rules/RULESET.md', '.ai-rules/PROJECT_RULES.md', '.ai-rules/upstream/CORE.md')
-        $missingRoutes = Get-MissingAgentRoutes -Content $agentsContent
-        if ($missingRoutes.Count -gt 0) {
+        $selectedProfiles = if ($manifestValid) { @($manifest.profiles | ForEach-Object { [string]$_ }) } else { @() }
+        $routeState = Get-AgentRouteState -Content $agentsContent -SelectedProfiles $selectedProfiles
+        if ($routeState.MissingRequiredRoutes.Count -gt 0) {
             if ($pinned) {
-                Add-DoctorResult -Level 'ERROR' -Message "Закреплённый проект не подключает обязательные маршруты AI Rules Hub. Объедините существующий AGENTS.md с templates/AGENTS.md. Отсутствуют: $($missingRoutes -join ', ')." -Errors $errors -Warnings $warnings
+                Add-DoctorResult -Level 'ERROR' -Message "Закреплённый проект не подключает обязательные маршруты AI Rules Hub. Объедините существующий AGENTS.md с templates/AGENTS.md. Отсутствуют: $($routeState.MissingRequiredRoutes -join ', ')." -Errors $errors -Warnings $warnings
             }
             else {
-                Add-DoctorResult -Level 'WARN' -Message "AGENTS.md пока не подключает правила хаба. Объедините существующий файл с templates/AGENTS.md. Отсутствуют: $($missingRoutes -join ', ')." -Errors $errors -Warnings $warnings
+                Add-DoctorResult -Level 'WARN' -Message "AGENTS.md пока не подключает правила хаба. Объедините существующий файл с templates/AGENTS.md. Отсутствуют: $($routeState.MissingRequiredRoutes -join ', ')." -Errors $errors -Warnings $warnings
             }
         }
         else {
             Add-DoctorResult -Level 'OK' -Message 'AGENTS.md содержит стандартные маршруты AI Rules Hub.' -Errors $errors -Warnings $warnings
         }
 
-        foreach ($route in $routes) {
+        if (-not $routeState.ProfileRoutingPresent) {
+            if ($pinned) {
+                Add-DoctorResult -Level 'ERROR' -Message "Закреплённый проект не подключает выбранные профили AI Rules Hub. Выбраны: $($selectedProfiles -join ', '). Объедините существующий AGENTS.md с templates/AGENTS.md." -Errors $errors -Warnings $warnings
+            }
+            else {
+                Add-DoctorResult -Level 'WARN' -Message 'AGENTS.md пока не подключает выбранные профили AI Rules Hub. Объедините существующий файл с templates/AGENTS.md.' -Errors $errors -Warnings $warnings
+            }
+        }
+        elseif ($routeState.ProfileRoutingRequired) {
+            Add-DoctorResult -Level 'OK' -Message 'AGENTS.md подключает все выбранные профили AI Rules Hub.' -Errors $errors -Warnings $warnings
+        }
+
+        foreach ($route in $routeState.RequiredRoutes) {
             if (-not $agentsContent.Contains($route)) {
                 continue
             }
@@ -1139,7 +1218,20 @@ function Invoke-Update {
     $hubState = Get-HubGitState
 
     Write-Host "Текущая revision проекта: $(if ([string]::IsNullOrWhiteSpace($currentRevision)) { 'не закреплена' } else { $currentRevision })"
-    Write-Host "Целевая revision хаба: $($hubState.Revision)"
+    Write-Host "Базовая revision checkout: $($hubState.Revision)"
+    Write-Host "Рабочее дерево хаба изменено: $($hubState.Dirty.ToString().ToLowerInvariant())"
+    if ($hubState.Dirty) {
+        Write-Host ''
+        Write-Host 'ВНИМАНИЕ: рабочее дерево хаба содержит незакоммиченные изменения.' -ForegroundColor Yellow
+        Write-Host ''
+        Write-Host 'Preview построен по текущим файлам checkout и может не соответствовать'
+        Write-Host 'только указанному commit SHA.'
+        Write-Host ''
+        Write-Host 'Применение через update -Apply заблокировано до очистки рабочего дерева.'
+    }
+    else {
+        Write-Host "Целевая revision хаба: $($hubState.Revision)"
+    }
 
     $planArguments = @(
         '-ProjectRoot', $ResolvedProjectRoot,
@@ -1161,7 +1253,13 @@ function Invoke-Update {
 
     if (-not $Accept) {
         Write-Host "`nФайлы проекта не изменены." -ForegroundColor Green
-        Write-Host 'После проверки выполните ту же команду с -Apply, чтобы закрепить revision.'
+        if ($hubState.Dirty) {
+            Write-Host 'Чтобы применить результат, сначала сохраните или отмените изменения хаба,'
+            Write-Host 'повторно выполните preview и только затем используйте -Apply.'
+        }
+        else {
+            Write-Host 'После проверки выполните ту же команду с -Apply, чтобы закрепить revision.'
+        }
         return
     }
 
