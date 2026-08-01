@@ -113,15 +113,21 @@ try {
     Assert-True -Condition ($rulesetIndex -ge 0 -and $rulesetIndex -lt $projectRulesIndex -and $projectRulesIndex -lt $coreIndex -and $coreIndex -lt $profilesIndex -and $profilesIndex -lt $topicsIndex) -Message 'agent template must route RULESET, project rules, core, profiles, then task topics'
     Assert-True -Condition ($agentsTemplate -match 'не весь `upstream/`' -and $agentsTemplate -match 'PROJECT_STUDY\.md.*явном выборе') -Message 'agent template must forbid whole-upstream reading and route project-study explicitly'
     Assert-True -Condition ($agentsTemplate -match 'Подключение хаба разрешает менять только' -and $agentsTemplate -match 'не разрешает менять несвязанные код, документацию, CI, лицензию или настройки' -and $agentsTemplate -match 'зафиксируй в `RULESET\.md`') -Message 'agent template must provide a scope firewall for hub adoption'
-    Assert-True -Condition (([regex]::Matches($projectRulesTemplate, '(?m)^## ')).Count -eq 6 -and $projectRulesTemplate.Length -lt 2500 -and $projectRulesTemplate -notmatch '\|.*\|.*\|') -Message 'default project rules template must stay minimal'
+    Assert-True -Condition ($agentsTemplate -match 'читателя.*задачу.*tracked-хранения.*публичности' -and $agentsTemplate -match 'канонического документа' -and $agentsTemplate -match 'минимальный локальный каталог') -Message 'agent template must route new documents through audience, purpose, storage, publication, and canonical-source decisions'
+    Assert-True -Condition (([regex]::Matches($projectRulesTemplate, '(?m)^## ')).Count -eq 7 -and $projectRulesTemplate.Length -lt 2500 -and $projectRulesTemplate -notmatch '\|.*\|.*\|') -Message 'default project rules template must stay minimal'
     Assert-True -Condition ($fullProjectRulesTemplate -match 'docs/README\.md' -and $fullProjectRulesTemplate -match '\|.*\|.*\|') -Message 'full project rules template must retain detailed routing content'
     foreach ($projectTemplate in @($projectRulesTemplate, $fullProjectRulesTemplate)) {
         Assert-True -Condition ($projectTemplate -match 'не установлен' -and $projectTemplate -match 'не установлена' -and $projectTemplate -match 'Не создавай документацию, tooling или CI' -and $projectTemplate -match 'RULESET\.md') -Message 'project rules templates must describe missing sources without creating them during adoption'
+        Assert-True -Condition ($projectTemplate -match 'Публичная документация' -and $projectTemplate -match 'Локальная или закрытая документация' -and $projectTemplate -match 'Критерий публикации') -Message 'project rules templates must support an explicit documentation boundary'
+        Assert-True -Condition ($projectTemplate -notmatch 'ROADMAP\.md|BACKLOG\.md|decisions/') -Message 'project rules templates must not require public planning or decision-log files'
     }
+    Assert-True -Condition ($rulesetTemplate -notmatch 'ROADMAP\.md|BACKLOG\.md|decisions/') -Message 'RULESET template must not require public planning or decision-log files'
     Assert-True -Condition ($rulesetTemplate -match 'не локальное исключение' -and $rulesetTemplate -match 'не разрешение на исправление' -and $rulesetTemplate -match 'правило.*наблюдаемое несоответствие.*evidence.*риск.*триггер возврата' -and $rulesetTemplate -match 'неизвестно') -Message 'RULESET deferred gaps must be evidence records, not remediation permission'
     Assert-True -Condition ($profilesReadme -match 'новым и изменяемым файлам' -and $profilesReadme -match 'внешним действием.*gate' -and $profilesReadme -match 'не разрешает аудит всего репозитория') -Message 'profile guidance must be prospective and action-gated'
     Assert-True -Condition ($publicRepositoryProfile -match '(?m)^### Постоянные инварианты\s*$' -and $publicRepositoryProfile -match '(?m)^### Гейты внешнего действия\s*$' -and $publicRepositoryProfile -match 'Существующие несоответствия.*разрывами внедрения' -and $publicRepositoryProfile -match 'LICENSE.*CONTRIBUTING.*security policy') -Message 'public profile must separate ongoing invariants, external-action gates, and adoption gaps'
+    Assert-True -Condition ($publicRepositoryProfile -match 'аудиторию.*назначение.*необходимость' -and $publicRepositoryProfile -match 'PROJECT_STUDY.*не является разрешением публикации') -Message 'public profile must gate documentation publication without duplicating the internal-document catalog'
     Assert-True -Condition ($documentationRule -match 'маршрутов.*не является аудитом' -and $documentationRule -match 'аудит не даёт разрешения на remediation' -and $documentationRule -match 'выбор темы документации не запускает полный inventory') -Message 'documentation routing and audit must not authorize remediation'
+    Assert-True -Condition ($documentationRule -match '(?m)^## Аудитория и граница публикации\s*$' -and $documentationRule -match 'public / tracked internal / local private' -and $documentationRule -match 'явно названной внешней аудитории') -Message 'documentation rule must be the canonical audience and publication boundary'
     Assert-True -Condition ($aiCollaborationRule -match 'baseline-review.*read-only' -and $aiCollaborationRule -match 'remediation.*выбора владельцем' -and $aiCollaborationRule -match 'не превращает найденное несоответствие в новую подзадачу') -Message 'AI collaboration must keep connection, review, and remediation separate'
     Assert-True -Condition ($hubProjectRules -match '\.\./profiles/public-repository\.md' -and $hubProjectRules -match 'maintainer-led') -Message 'hub project rules must apply the public repository profile explicitly'
     Assert-True -Condition ($securityRule -match 'Issues' -and $securityRule -match 'AGENTS\.md' -and $securityRule -match 'connector context') -Message 'security rule must treat public input and agent instructions as trust-boundary concerns'
@@ -129,6 +135,9 @@ try {
     Assert-True -Condition ($validationWorkflow -match '(?m)^permissions:\s*\r?\n\s+contents:\s*read\s*$' -and $validationWorkflow -match 'actions/checkout@[0-9a-f]{40}' -and $validationWorkflow -match 'persist-credentials:\s*false') -Message 'validation workflow must be read-only and use pinned checkout without persisted credentials'
     Assert-True -Condition ((Test-Path -LiteralPath (Join-Path $hubRoot 'CONTRIBUTING.md')) -and (Test-Path -LiteralPath (Join-Path $hubRoot '.github/SECURITY.md'))) -Message 'public repository entry points must exist'
     Assert-True -Condition ($hubCheck -match 'LICENSE\.md' -and $hubCheck -match 'GitHub-discoverable CONTRIBUTING' -and $hubCheck -match 'full 40-character commit SHA') -Message 'hub check must enforce public repository hygiene'
+    Assert-True -Condition ($hubCheck -match 'hub/BACKLOG\.md' -and $hubCheck -match '0001-layered-ruleset\.md' -and $hubCheck -match '\.local-docs/') -Message 'hub check must reject owner-only public documents and require an ignored local location'
+    Assert-True -Condition ($hubCheck -notmatch "'hub/decisions/0002" -and $hubCheck -notmatch "'hub/decisions/0003") -Message 'hub check must not require a public decisions catalog or specific ADR history'
+    Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $hubRoot 'hub/BACKLOG.md')) -and -not (Test-Path -LiteralPath (Join-Path $hubRoot 'hub/decisions/0001-layered-ruleset.md'))) -Message 'owner backlog and redundant layered-rules ADR must not remain public'
     foreach ($topicProperty in $catalog.topics.PSObject.Properties) {
         Assert-True -Condition (-not [string]::IsNullOrWhiteSpace([string]$topicProperty.Value.file) -and -not [string]::IsNullOrWhiteSpace([string]$topicProperty.Value.description)) -Message "catalog topic '$($topicProperty.Name)' must have file and description"
     }
@@ -151,7 +160,8 @@ try {
     $topicLengths = @($catalog.topics.PSObject.Properties | ForEach-Object { (Get-Content -LiteralPath (Join-Path $hubRoot ([string]$_.Value.file)) -Raw -Encoding UTF8).Length })
     Assert-True -Condition ($coreRule.Length -lt (($topicLengths | Measure-Object -Maximum).Maximum) -and $coreRule.Length -lt (($topicLengths | Measure-Object -Sum).Sum / 3)) -Message 'core must remain compact relative to thematic rules'
     Assert-True -Condition ($projectStudyRule -match 'study-документ' -and $projectStudyRule -match 'Исходный код.*конфигурация.*Git history.*read-only' -and $projectStudyRule -match 'факт.*вероятный вывод.*неизвестное.*оценка' -and $projectStudyRule -match 'язык следует локальным правилам или запросу') -Message 'project-study must limit writes to study documents and distinguish evidence statuses without a universal language'
-    Assert-True -Condition ($projectStudyRule -notmatch '\.project-study/' -and $projectStudyRule -notmatch '13' -and $projectStudyRule -notmatch '(?m)^```') -Message 'project-study must not impose a universal folder, fixed file count, or long prompt templates'
+    Assert-True -Condition ($projectStudyRule -match 'по умолчанию локальна' -and $projectStudyRule -match 'явно названной внешней аудитории' -and $projectStudyRule -match 'не требует публиковать project snapshot' -and $projectStudyRule -match 'не требует отдельного файла') -Message 'project-study must keep results local unless an external audience and benefit justify publication'
+    Assert-True -Condition ($projectStudyRule -notmatch '\.project-study/|public-docs/|docs/project-study' -and $projectStudyRule -notmatch '13' -and $projectStudyRule -notmatch '(?m)^```') -Message 'project-study must not impose a public folder, fixed file count, or long prompt templates'
     foreach ($reliabilityHeading in @('Работоспособность', 'Деградация', 'Наблюдаемость', 'Восстановление и инциденты', 'Область применения')) {
         Assert-True -Condition ($reliabilityRule -match ('(?m)^## ' + [regex]::Escape($reliabilityHeading) + '\s*$')) -Message "reliability topic must retain section: $reliabilityHeading"
     }
@@ -235,7 +245,7 @@ try {
     Assert-True -Condition (([regex]::Matches($seededRuleset, '(?m)^Нет\.$')).Count -eq 2) -Message 'CLI init must mark optional RULESET sections as empty'
     Assert-True -Condition ($seededRuleset -notmatch '<название>|release gate') -Message 'optional RULESET sections must not retain placeholders'
     $seededProjectRules = Get-Content -LiteralPath (Join-Path $cliProjectRoot '.ai-rules/PROJECT_RULES.md') -Raw -Encoding UTF8
-    Assert-True -Condition (([regex]::Matches($seededProjectRules, '(?m)^## ')).Count -eq 6 -and $seededProjectRules.Length -lt 2500) -Message 'CLI init must seed the minimal PROJECT_RULES.md'
+    Assert-True -Condition (([regex]::Matches($seededProjectRules, '(?m)^## ')).Count -eq 7 -and $seededProjectRules.Length -lt 2500) -Message 'CLI init must seed the minimal PROJECT_RULES.md'
     $repeatCliInit = Invoke-HubScript -ScriptPath $cliPath -Arguments @('init', '-ProjectRoot', $cliProjectRoot)
     Assert-True -Condition ($repeatCliInit.ExitCode -ne 0 -and $repeatCliInit.Output -match 'manifest' -and $repeatCliInit.Output -match 'существует') -Message 'repeat CLI init must fail explicitly'
 
@@ -281,14 +291,15 @@ try {
     $existingFilesProjectRoot = Join-Path $tempRoot 'project with existing local files'
     $existingFilesRulesRoot = Join-Path $existingFilesProjectRoot '.ai-rules'
     New-Item -ItemType Directory -Path $existingFilesRulesRoot -Force | Out-Null
-    New-Item -ItemType Directory -Path (Join-Path $existingFilesProjectRoot 'docs'), (Join-Path $existingFilesProjectRoot 'src') -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $existingFilesProjectRoot 'docs'), (Join-Path $existingFilesProjectRoot 'src'), (Join-Path $existingFilesProjectRoot '.local-docs') -Force | Out-Null
     Set-Content -LiteralPath (Join-Path $existingFilesProjectRoot 'README.md') -Value "# Existing project`n`nKeep this public entry point unchanged." -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $existingFilesProjectRoot 'docs/guide.md') -Value "# Existing guide`n`nCanonical project documentation." -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $existingFilesProjectRoot 'src/main.txt') -Value 'existing source bytes' -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $existingFilesProjectRoot '.local-docs/owner-notes.md') -Value 'private owner documentation' -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $existingFilesProjectRoot 'AGENTS.md') -Value '# Existing agent rules' -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $existingFilesRulesRoot 'RULESET.md') -Value '# Existing ruleset' -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $existingFilesRulesRoot 'PROJECT_RULES.md') -Value '# Existing project rules' -Encoding UTF8
-    $existingProjectSurfacePaths = @('README.md', 'docs/guide.md', 'src/main.txt')
+    $existingProjectSurfacePaths = @('README.md', 'docs/guide.md', 'src/main.txt', '.local-docs/owner-notes.md')
     $existingProjectSurfaceBefore = @($existingProjectSurfacePaths | ForEach-Object { [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $existingFilesProjectRoot $_))) })
     $existingFilesInit = Invoke-HubScript -ScriptPath $cliPath -Arguments @('init', '-ProjectRoot', $existingFilesProjectRoot, '-Profiles', 'standard-product')
     Assert-True -Condition ($existingFilesInit.ExitCode -eq 0) -Message "initializer must support an existing local rules directory: $($existingFilesInit.Output)"

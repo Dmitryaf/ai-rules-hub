@@ -14,6 +14,7 @@ function Get-RepoRelativePath {
 }
 
 $requiredPaths = @(
+    '.gitignore',
     'AGENTS.md',
     'README.md',
     'ai-rules.ps1',
@@ -25,8 +26,6 @@ $requiredPaths = @(
     'hub/PROJECT_RULES.md',
     'hub/ARCHITECTURE.md',
     'hub/COMMIT_RULES.md',
-    'hub/decisions/0002-rule-profile-and-playbook-boundaries.md',
-    'hub/decisions/0003-non-invasive-project-adoption.md',
     'profiles/README.md',
     'templates/README.md',
     'templates/PROJECT_RULES.full.md',
@@ -46,6 +45,24 @@ foreach ($requiredPath in $requiredPaths) {
     $absolutePath = Join-Path $repoRoot $requiredPath
     if (-not (Test-Path -LiteralPath $absolutePath)) {
         $errors.Add("Missing required path: $requiredPath")
+    }
+}
+
+$forbiddenPublicPaths = @(
+    'hub/BACKLOG.md',
+    'hub/decisions/0001-layered-ruleset.md'
+)
+foreach ($forbiddenPublicPath in $forbiddenPublicPaths) {
+    if (Test-Path -LiteralPath (Join-Path $repoRoot $forbiddenPublicPath)) {
+        $errors.Add("Owner-only documentation must not be part of the public hub: $forbiddenPublicPath")
+    }
+}
+
+$gitignorePath = Join-Path $repoRoot '.gitignore'
+if (Test-Path -LiteralPath $gitignorePath -PathType Leaf) {
+    $gitignoreContent = Get-Content -LiteralPath $gitignorePath -Raw -Encoding UTF8
+    if ($gitignoreContent -notmatch '(?m)^\.local-docs/$') {
+        $errors.Add('Local owner documentation directory must stay ignored: .local-docs/')
     }
 }
 
@@ -105,7 +122,10 @@ if (Test-Path -LiteralPath $workflowRoot -PathType Container) {
 }
 
 $markdownFiles = Get-ChildItem -LiteralPath $repoRoot -Recurse -File -Filter '*.md' |
-    Where-Object { $_.FullName -notmatch '[\\/]\.git[\\/]' }
+    Where-Object {
+        $_.FullName -notmatch '[\\/]\.git[\\/]' -and
+        $_.FullName -notmatch '[\\/]\.local-docs[\\/]'
+    }
 
 $linkPattern = [regex]'\[[^\]]*\]\((?<target>[^)]+)\)'
 
@@ -274,7 +294,8 @@ foreach ($jsonFile in $jsonFiles) {
 
 $textFiles = Get-ChildItem -LiteralPath $repoRoot -Recurse -File |
     Where-Object {
-        $_.FullName -notmatch '[\\/]\.git[\\/]' -and (
+        $_.FullName -notmatch '[\\/]\.git[\\/]' -and
+        $_.FullName -notmatch '[\\/]\.local-docs[\\/]' -and (
             $_.Extension -in @('.md', '.ps1', '.json', '.yml', '.yaml') -or
             $_.Name -eq '.gitattributes' -or
             $_.FullName -match '[\\/]\.githooks[\\/]'
