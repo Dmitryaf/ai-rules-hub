@@ -71,7 +71,7 @@
       ]
     },
     "research-driven": {
-      "description": "Проект, решения которого зависят от исследований, runtime evidence или неизвестных API.",
+      "description": "Проект, решения которого зависят от исследований, данных о выполнении или неизвестных API.",
       "file": "profiles/research-driven.md",
       "topics": [
         "research-and-evidence",
