@@ -152,6 +152,7 @@ if (Test-Path -LiteralPath $catalogPath -PathType Leaf) {
         foreach ($coreFile in @($catalog.core)) {
             $catalogSources.Add([string]$coreFile)
         }
+        $topicFileOwners = @{}
         foreach ($topicProperty in $catalog.topics.PSObject.Properties) {
             if ([string]::IsNullOrWhiteSpace([string]$topicProperty.Value.file)) {
                 $errors.Add("Topic '$($topicProperty.Name)' has no file.")
@@ -159,8 +160,21 @@ if (Test-Path -LiteralPath $catalogPath -PathType Leaf) {
             if ([string]::IsNullOrWhiteSpace([string]$topicProperty.Value.description)) {
                 $errors.Add("Topic '$($topicProperty.Name)' has no description.")
             }
-            $catalogSources.Add([string]$topicProperty.Value.file)
+            $topicFile = ([string]$topicProperty.Value.file).Replace('\', '/')
+            $catalogSources.Add($topicFile)
+            if ($topicFile -in @('rules/README.md', 'rules/CORE.md')) {
+                $errors.Add("Catalog topic '$($topicProperty.Name)' references a reserved rule file: $topicFile")
+            }
+            if (-not [string]::IsNullOrWhiteSpace($topicFile)) {
+                if ($topicFileOwners.ContainsKey($topicFile)) {
+                    $errors.Add("Multiple catalog topics reference the same rule file: $topicFile")
+                }
+                else {
+                    $topicFileOwners[$topicFile] = [string]$topicProperty.Name
+                }
+            }
         }
+        $profileFileOwners = @{}
         foreach ($profileProperty in $catalog.profiles.PSObject.Properties) {
             if ([string]::IsNullOrWhiteSpace([string]$profileProperty.Value.description)) {
                 $errors.Add("Profile '$($profileProperty.Name)' has no description.")
@@ -171,7 +185,19 @@ if (Test-Path -LiteralPath $catalogPath -PathType Leaf) {
             if (@($profileProperty.Value.topics).Count -eq 0) {
                 $errors.Add("Profile '$($profileProperty.Name)' has no topic composition.")
             }
-            $catalogSources.Add([string]$profileProperty.Value.file)
+            $profileFile = ([string]$profileProperty.Value.file).Replace('\', '/')
+            $catalogSources.Add($profileFile)
+            if ($profileFile -eq 'profiles/README.md') {
+                $errors.Add("Catalog profile '$($profileProperty.Name)' references a reserved profile file: $profileFile")
+            }
+            if (-not [string]::IsNullOrWhiteSpace($profileFile)) {
+                if ($profileFileOwners.ContainsKey($profileFile)) {
+                    $errors.Add("Multiple catalog profiles reference the same profile file: $profileFile")
+                }
+                else {
+                    $profileFileOwners[$profileFile] = [string]$profileProperty.Name
+                }
+            }
             foreach ($profileTopic in @($profileProperty.Value.topics)) {
                 if ($null -eq $catalog.topics.PSObject.Properties[[string]$profileTopic]) {
                     $errors.Add("Profile '$($profileProperty.Name)' references unknown topic: $profileTopic")
@@ -186,6 +212,28 @@ if (Test-Path -LiteralPath $catalogPath -PathType Leaf) {
             }
             if (-not (Test-Path -LiteralPath (Join-Path $repoRoot $catalogSource) -PathType Leaf)) {
                 $errors.Add("Catalog source does not exist: $catalogSource")
+            }
+        }
+
+        $rulesRoot = Join-Path $repoRoot 'rules'
+        foreach ($ruleFile in @(Get-ChildItem -LiteralPath $rulesRoot -File -Filter '*.md')) {
+            if ($ruleFile.Name -in @('README.md', 'CORE.md')) {
+                continue
+            }
+            $ruleRelativePath = 'rules/' + $ruleFile.Name
+            if (-not $topicFileOwners.ContainsKey($ruleRelativePath)) {
+                $errors.Add("Rule file is not registered in catalog: $ruleRelativePath")
+            }
+        }
+
+        $profilesRoot = Join-Path $repoRoot 'profiles'
+        foreach ($profileFile in @(Get-ChildItem -LiteralPath $profilesRoot -File -Filter '*.md')) {
+            if ($profileFile.Name -eq 'README.md') {
+                continue
+            }
+            $profileRelativePath = 'profiles/' + $profileFile.Name
+            if (-not $profileFileOwners.ContainsKey($profileRelativePath)) {
+                $errors.Add("Profile file is not registered in catalog: $profileRelativePath")
             }
         }
 
