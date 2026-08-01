@@ -21,9 +21,11 @@ $requiredPaths = @(
     '.github/SECURITY.md',
     'rules/README.md',
     'rules/CORE.md',
+    'rules/RELIABILITY_AND_OPERATIONS.md',
     'hub/PROJECT_RULES.md',
     'hub/ARCHITECTURE.md',
     'hub/COMMIT_RULES.md',
+    'hub/decisions/0002-rule-profile-and-playbook-boundaries.md',
     'profiles/README.md',
     'templates/README.md',
     'templates/PROJECT_RULES.full.md',
@@ -163,6 +165,12 @@ if (Test-Path -LiteralPath $catalogPath -PathType Leaf) {
             if ([string]::IsNullOrWhiteSpace([string]$profileProperty.Value.description)) {
                 $errors.Add("Profile '$($profileProperty.Name)' has no description.")
             }
+            if ([string]::IsNullOrWhiteSpace([string]$profileProperty.Value.file)) {
+                $errors.Add("Profile '$($profileProperty.Name)' has no file.")
+            }
+            if (@($profileProperty.Value.topics).Count -eq 0) {
+                $errors.Add("Profile '$($profileProperty.Name)' has no topic composition.")
+            }
             $catalogSources.Add([string]$profileProperty.Value.file)
             foreach ($profileTopic in @($profileProperty.Value.topics)) {
                 if ($null -eq $catalog.topics.PSObject.Properties[[string]$profileTopic]) {
@@ -178,6 +186,19 @@ if (Test-Path -LiteralPath $catalogPath -PathType Leaf) {
             }
             if (-not (Test-Path -LiteralPath (Join-Path $repoRoot $catalogSource) -PathType Leaf)) {
                 $errors.Add("Catalog source does not exist: $catalogSource")
+            }
+        }
+
+        foreach ($profileProperty in $catalog.profiles.PSObject.Properties) {
+            $profilePath = Join-Path $repoRoot ([string]$profileProperty.Value.file)
+            if (Test-Path -LiteralPath $profilePath -PathType Leaf) {
+                $profileContent = Get-Content -LiteralPath $profilePath -Raw -Encoding UTF8
+                if ($profileContent -notmatch '(?m)^## Назначение\s*$' -or $profileContent -notmatch '(?m)^## Уникальные обязательства\s*$') {
+                    $errors.Add("Profile '$($profileProperty.Name)' must contain purpose and unique obligations.")
+                }
+                if ($profileContent -match '(?m)^##? Подключить' -or $profileContent -match '\.\./rules/') {
+                    $errors.Add("Profile '$($profileProperty.Name)' must use catalog composition instead of embedded topic links.")
+                }
             }
         }
     }
