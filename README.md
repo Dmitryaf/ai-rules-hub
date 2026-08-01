@@ -14,6 +14,22 @@ AI Rules Hub — локальный набор переносимых прави
 
 Зависимости и package manager не нужны. Все команды `ai-rules.ps1` ниже запускаются из корня checkout хаба; `-ProjectRoot` всегда указывает на подключаемый проект.
 
+## Выбрать profiles и topics
+
+Profile описывает устойчивое свойство проекта и всегда читается после CORE. Сочетание profiles не является наследованием: проект может выбрать несколько независимых усилений. `standard-product` обычно служит основой пользовательского приложения; `learning-project`, `public-repository` и `data-sensitive` часто добавляются к ней. `research-driven` может быть самостоятельным исследовательским прототипом или дополнением продукта. Это рекомендации, а не ограничения одиночных profiles.
+
+| Сценарий | Profiles |
+| --- | --- |
+| Обычное приложение | `standard-product` |
+| Учебное приложение | `standard-product + learning-project` |
+| Публичное приложение | `standard-product + public-repository` |
+| Публичный учебный проект | `standard-product + learning-project + public-repository` |
+| Приложение с чувствительными данными | `standard-product + data-sensitive` |
+| Исследовательский прототип | `research-driven` |
+| Продукт, зависящий от исследования | `standard-product + research-driven` |
+
+Topics выбираются отдельно для дополнительных классов задач, которые не выражены profiles, например `reliability-and-operations` для эксплуатационного риска.
+
 ## Установка
 
 ```powershell
@@ -46,7 +62,7 @@ Set-Location ai-rules-hub
 
    - `.ai-rules/RULESET.md` — причины выбора и явные исключения;
    - `.ai-rules/PROJECT_RULES.md` — назначение, границы, структура и проверки проекта;
-   - корневой `AGENTS.md` — проверьте маршрутизацию правил.
+   - корневой `AGENTS.md` — проверьте маршрутизацию CORE, выбранных profiles и task topics.
 
 4. Проверьте подключение и предварительный план:
 
@@ -129,6 +145,8 @@ Set-Location ai-rules-hub
 ```
 
 Если manifest ещё не закреплён, `apply` остановится и направит к `update -Apply`.
+
+Read-only `update` разрешён из dirty checkout хаба, но такой preview строится по текущим рабочим файлам и не соответствует только показанному HEAD SHA. CLI выводит отдельное предупреждение; `update -Apply` остаётся заблокированным до сохранения или отмены изменений и повторного preview.
 
 ## Изменить набор правил проекта
 
