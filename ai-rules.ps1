@@ -1151,6 +1151,9 @@ function Invoke-ProjectDoctor {
     }
 
     Write-Host ''
+    Write-Host 'Doctor проверяет целостность подключения AI Rules Hub.'
+    Write-Host 'Успешный результат не означает соответствие всего проекта всем выбранным правилам.'
+    Write-Host ''
     if ($errors.Count -gt 0) {
         Write-Host 'Итог: требуется исправление' -ForegroundColor Red
         return 1
@@ -1365,6 +1368,10 @@ try {
                 throw 'Инициализация проекта завершилась ошибкой.'
             }
             Write-Host "`nПроект инициализирован." -ForegroundColor Green
+            Write-Host 'Подключение подготовлено.'
+            Write-Host 'Следующий шаг ограничен AGENTS.md, RULESET.md и PROJECT_RULES.md.'
+            Write-Host 'Не исправляйте код, документацию, CI, лицензию или настройки проекта'
+            Write-Host 'в рамках подключения. Обнаруженные разрывы зафиксируйте отдельно.'
             Write-Host "`nПеред первым применением:"
             Write-Host ''
             Write-Host '1. Заполните .ai-rules/RULESET.md.'
