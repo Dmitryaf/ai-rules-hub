@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
     [string]$ProjectRoot,
@@ -20,7 +20,7 @@ function Get-PathInsideRoot {
     )
 
     if ([System.IO.Path]::IsPathRooted($RelativePath)) {
-        throw "$Label must be relative: $RelativePath"
+        throw "$Label должен быть относительным путём: $RelativePath"
     }
 
     $rootFullPath = [System.IO.Path]::GetFullPath($Root).TrimEnd([char[]]@('\', '/'))
@@ -28,10 +28,44 @@ function Get-PathInsideRoot {
     $prefix = $rootFullPath + [System.IO.Path]::DirectorySeparatorChar
 
     if (-not $candidate.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "$Label escapes the project root: $RelativePath"
+        throw "$Label выходит за пределы корня проекта: $RelativePath"
     }
 
     return $candidate
+}
+
+function Get-RulesetSeedContent {
+    param(
+        [Parameter(Mandatory = $true)][string]$TemplatePath,
+        [string[]]$SelectedProfiles,
+        [string[]]$SelectedTopics
+    )
+
+    $content = Get-Content -LiteralPath $TemplatePath -Raw -Encoding UTF8
+    $newLine = if ($content.Contains("`r`n")) { "`r`n" } else { "`n" }
+    $profileLines = @(
+        if (@($SelectedProfiles).Count -eq 0) {
+            '- Пока не выбраны.'
+        }
+        else {
+            foreach ($profile in @($SelectedProfiles | Sort-Object -Unique)) {
+                '- `{0}` — `<почему выбран>`' -f $profile
+            }
+        }
+    )
+    $topicLines = @(
+        if (@($SelectedTopics).Count -eq 0) {
+            '- Пока не выбраны.'
+        }
+        else {
+            foreach ($topic in @($SelectedTopics | Sort-Object -Unique)) {
+                '- `{0}` — `<почему подключена отдельно>`' -f $topic
+            }
+        }
+    )
+
+    $content = $content.Replace('- `<профиль>` — `<почему выбран>`', ($profileLines -join $newLine))
+    return $content.Replace('- `<тема>` — `<почему подключена отдельно>`', ($topicLines -join $newLine))
 }
 
 $hubRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
@@ -40,7 +74,7 @@ $catalogPath = Join-Path $hubRoot 'sync/catalog.json'
 $catalog = Get-Content -LiteralPath $catalogPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
 if ($catalog.schemaVersion -ne '0.1') {
-    throw "Unsupported catalog schemaVersion: $($catalog.schemaVersion)"
+    throw "Неподдерживаемая catalog schemaVersion: $($catalog.schemaVersion)"
 }
 
 $availableTopics = @($catalog.topics.PSObject.Properties.Name)
@@ -67,13 +101,13 @@ $Profiles = @(
 
 foreach ($topic in $Topics) {
     if ($topic -notin $availableTopics) {
-        throw "Unknown topic '$topic'. Available: $($availableTopics -join ', ')"
+        throw "Неизвестная тема '$topic'. Доступны: $($availableTopics -join ', ')"
     }
 }
 
 foreach ($profile in $Profiles) {
     if ($profile -notin $availableProfiles) {
-        throw "Unknown profile '$profile'. Available: $($availableProfiles -join ', ')"
+        throw "Неизвестный профиль '$profile'. Доступны: $($availableProfiles -join ', ')"
     }
 }
 
@@ -86,17 +120,17 @@ $legacyPaths = @(
 
 foreach ($legacyPath in $legacyPaths) {
     if (Test-Path -LiteralPath $legacyPath) {
-        throw "Legacy sync file detected. Review and migrate it explicitly before initialization: $legacyPath"
+        throw "Обнаружен legacy sync-файл. Просмотрите и перенесите его явно до инициализации: $legacyPath"
     }
 }
 
 if (Test-Path -LiteralPath $manifestPath) {
-    throw "Sync manifest already exists and will not be overwritten: $manifestPath"
+    throw "Sync manifest уже существует и не будет перезаписан: $manifestPath"
 }
 
 if (-not (Test-Path -LiteralPath $localRulesRoot -PathType Container)) {
     New-Item -ItemType Directory -Path $localRulesRoot | Out-Null
-    Write-Host "Created directory: $localRulesRoot" -ForegroundColor Green
+    Write-Host "[CREATED] Создан каталог: $localRulesRoot" -ForegroundColor Green
 }
 
 $manifest = [ordered]@{
@@ -110,7 +144,7 @@ $manifest = [ordered]@{
 }
 
 $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
-Write-Host "Created: $manifestPath" -ForegroundColor Green
+Write-Host "[CREATED] Создан manifest: $manifestPath" -ForegroundColor Green
 
 if ($SeedProjectFiles) {
     $seedFiles = @(
@@ -123,15 +157,20 @@ if ($SeedProjectFiles) {
         $sourcePath = Join-Path $hubRoot "templates/$($seedFile.Name)"
         $targetPath = Join-Path $seedFile.TargetRoot $seedFile.Name
         if (Test-Path -LiteralPath $targetPath) {
-            Write-Host "Skipped existing local file: $targetPath" -ForegroundColor Yellow
+            Write-Host "[SKIP] Пропущен существующий пользовательский файл: $targetPath" -ForegroundColor Yellow
             continue
         }
 
-        Copy-Item -LiteralPath $sourcePath -Destination $targetPath
-        Write-Host "Seeded local file: $targetPath" -ForegroundColor Green
+        if ($seedFile.Name -eq 'RULESET.md') {
+            $rulesetContent = Get-RulesetSeedContent -TemplatePath $sourcePath -SelectedProfiles $Profiles -SelectedTopics $Topics
+            Set-Content -LiteralPath $targetPath -Value $rulesetContent -Encoding UTF8
+        }
+        else {
+            Copy-Item -LiteralPath $sourcePath -Destination $targetPath
+        }
+        Write-Host "[CREATED] Создан пользовательский файл: $targetPath" -ForegroundColor Green
     }
 }
 
-Write-Host 'Initialization does not apply synchronization.'
-$syncScriptPath = Join-Path $hubRoot 'scripts/sync-rules.ps1'
-Write-Host "Next: powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$syncScriptPath`" -ProjectRoot `"$projectRootFull`" -Mode Plan"
+Write-Host 'Инициализация не применяет правила автоматически.'
+Write-Host "Следующий шаг: .\ai-rules.ps1 update -ProjectRoot `"$projectRootFull`""

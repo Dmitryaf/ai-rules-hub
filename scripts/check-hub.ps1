@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param()
 
 $ErrorActionPreference = 'Stop'
@@ -150,9 +150,18 @@ if (Test-Path -LiteralPath $catalogPath -PathType Leaf) {
             $catalogSources.Add([string]$coreFile)
         }
         foreach ($topicProperty in $catalog.topics.PSObject.Properties) {
-            $catalogSources.Add([string]$topicProperty.Value)
+            if ([string]::IsNullOrWhiteSpace([string]$topicProperty.Value.file)) {
+                $errors.Add("Topic '$($topicProperty.Name)' has no file.")
+            }
+            if ([string]::IsNullOrWhiteSpace([string]$topicProperty.Value.description)) {
+                $errors.Add("Topic '$($topicProperty.Name)' has no description.")
+            }
+            $catalogSources.Add([string]$topicProperty.Value.file)
         }
         foreach ($profileProperty in $catalog.profiles.PSObject.Properties) {
+            if ([string]::IsNullOrWhiteSpace([string]$profileProperty.Value.description)) {
+                $errors.Add("Profile '$($profileProperty.Name)' has no description.")
+            }
             $catalogSources.Add([string]$profileProperty.Value.file)
             foreach ($profileTopic in @($profileProperty.Value.topics)) {
                 if ($null -eq $catalog.topics.PSObject.Properties[[string]$profileTopic]) {
