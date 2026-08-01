@@ -32,6 +32,7 @@ $requiredPaths = @(
     'sync/project-manifest.schema.json',
     'scripts/validate-commit-message.ps1',
     'scripts/sync-rules.ps1',
+    'scripts/sync-common.ps1',
     'scripts/init-project-sync.ps1',
     '.githooks/commit-msg',
     '.github/workflows/validate.yml',

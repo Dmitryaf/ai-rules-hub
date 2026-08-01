@@ -12,31 +12,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-
-function Get-SafePath {
-    param(
-        [Parameter(Mandatory = $true)][string]$BasePath,
-        [Parameter(Mandatory = $true)][string]$ChildPath,
-        [Parameter(Mandatory = $true)][string]$Label
-    )
-
-    if ([System.IO.Path]::IsPathRooted($ChildPath)) {
-        throw "$Label должен быть относительным путём: $ChildPath"
-    }
-
-    $baseFullPath = [System.IO.Path]::GetFullPath($BasePath).TrimEnd([char[]]@('\', '/'))
-    $candidate = [System.IO.Path]::GetFullPath((Join-Path $baseFullPath $ChildPath))
-    $prefix = $baseFullPath + [System.IO.Path]::DirectorySeparatorChar
-
-    if (
-        $candidate -ne $baseFullPath -and
-        -not $candidate.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)
-    ) {
-        throw "$Label выходит за пределы разрешённого корня: $ChildPath"
-    }
-
-    return $candidate
-}
+$hubRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $hubRoot 'scripts/sync-common.ps1')
 
 function Get-RelativePathFromRoot {
     param(
@@ -47,28 +24,6 @@ function Get-RelativePathFromRoot {
     $rootFullPath = [System.IO.Path]::GetFullPath($Root).TrimEnd([char[]]@('\', '/'))
     $pathFullPath = [System.IO.Path]::GetFullPath($Path)
     return $pathFullPath.Substring($rootFullPath.Length).TrimStart([char[]]@('\', '/')).Replace('\', '/')
-}
-
-function Get-Sha256 {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    $textExtensions = @('.md', '.json', '.yml', '.yaml', '.txt')
-    if ([System.IO.Path]::GetExtension($Path).ToLowerInvariant() -in $textExtensions) {
-        $content = [System.IO.File]::ReadAllText($Path)
-        $normalizedContent = $content.Replace("`r`n", "`n").Replace("`r", "`n")
-        $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
-        $bytes = $utf8WithoutBom.GetBytes($normalizedContent)
-        $sha256 = [System.Security.Cryptography.SHA256]::Create()
-        try {
-            $hashBytes = $sha256.ComputeHash($bytes)
-            return (($hashBytes | ForEach-Object { $_.ToString('x2') }) -join '')
-        }
-        finally {
-            $sha256.Dispose()
-        }
-    }
-
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
 function Get-JsonFile {
@@ -108,7 +63,6 @@ function Get-ManagedRelativePath {
     return $normalizedSource
 }
 
-$hubRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $projectRootFull = (Resolve-Path -LiteralPath $ProjectRoot).Path
 $catalogPath = Join-Path $hubRoot 'sync/catalog.json'
 $catalog = Get-JsonFile -Path $catalogPath
@@ -117,7 +71,7 @@ if ($catalog.schemaVersion -ne '0.1') {
     throw "Неподдерживаемая catalog schemaVersion: $($catalog.schemaVersion)"
 }
 
-$localRulesRoot = Get-SafePath -BasePath $projectRootFull -ChildPath '.ai-rules' -Label 'local rules directory'
+$localRulesRoot = Get-AiRulesSafePath -BasePath $projectRootFull -ChildPath '.ai-rules' -Label 'local rules directory'
 $manifestFullPath = Join-Path $localRulesRoot 'manifest.json'
 $destinationRoot = Join-Path $localRulesRoot 'upstream'
 $destinationRelative = '.ai-rules/upstream'
@@ -249,24 +203,24 @@ $plan = [System.Collections.Generic.List[object]]::new()
 $selectedTargets = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
 
 foreach ($sourceRelativePath in @($selectedSources) | Sort-Object) {
-    $sourceFullPath = Get-SafePath -BasePath $hubRoot -ChildPath $sourceRelativePath -Label 'catalog source'
+    $sourceFullPath = Get-AiRulesSafePath -BasePath $hubRoot -ChildPath $sourceRelativePath -Label 'catalog source'
     if (-not (Test-Path -LiteralPath $sourceFullPath -PathType Leaf)) {
         throw "Source из catalog не существует: $sourceRelativePath"
     }
 
     $managedRelativePath = Get-ManagedRelativePath -SourceRelativePath $sourceRelativePath
-    $targetFullPath = Get-SafePath -BasePath $destinationRoot -ChildPath $managedRelativePath -Label 'managed target'
+    $targetFullPath = Get-AiRulesSafePath -BasePath $destinationRoot -ChildPath $managedRelativePath -Label 'managed target'
     $targetRelativePath = Get-RelativePathFromRoot -Root $projectRootFull -Path $targetFullPath
     if (-not $selectedTargets.Add($targetRelativePath)) {
         throw "Несколько catalog sources ведут в один managed target: $targetRelativePath"
     }
 
-    $sourceHash = Get-Sha256 -Path $sourceFullPath
+    $sourceHash = Get-AiRulesSha256 -Path $sourceFullPath
     $targetHash = $null
     $action = 'add'
 
     if (Test-Path -LiteralPath $targetFullPath -PathType Leaf) {
-        $targetHash = Get-Sha256 -Path $targetFullPath
+        $targetHash = Get-AiRulesSha256 -Path $targetFullPath
         if ($targetHash -eq $sourceHash) {
             $action = 'unchanged'
         }
@@ -299,10 +253,10 @@ foreach ($oldTarget in @($oldByTarget.Keys) | Sort-Object) {
         throw "Target из lock находится вне managed-каталога upstream: $oldTarget"
     }
     $oldManagedRelativePath = $oldTarget.Substring($managedPrefix.Length)
-    $oldTargetFullPath = Get-SafePath -BasePath $destinationRoot -ChildPath $oldManagedRelativePath -Label 'locked target'
+    $oldTargetFullPath = Get-AiRulesSafePath -BasePath $destinationRoot -ChildPath $oldManagedRelativePath -Label 'locked target'
     $orphanAction = 'orphan-missing'
     if (Test-Path -LiteralPath $oldTargetFullPath -PathType Leaf) {
-        $oldTargetHash = Get-Sha256 -Path $oldTargetFullPath
+        $oldTargetHash = Get-AiRulesSha256 -Path $oldTargetFullPath
         if ($oldTargetHash -eq $oldByTarget[$oldTarget].sha256) {
             $orphanAction = 'orphan'
         }
