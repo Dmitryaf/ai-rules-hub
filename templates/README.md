@@ -1,13 +1,14 @@
-# Подключение нового проекта
+# Шаблоны подключённого проекта
 
-## Минимальный вариант
+## Обычное использование
 
-1. Инициализировать manifest через [`../scripts/init-project-sync.ps1`](../scripts/init-project-sync.ps1) либо создать его по [`../sync/project-manifest.example.json`](../sync/project-manifest.example.json).
-2. Создать корневой [`AGENTS.md`](AGENTS.md), а [`RULESET.md`](RULESET.md) и [`PROJECT_RULES.md`](PROJECT_RULES.md) разместить в `.ai-rules/`; initializer добавляет каждый файл только при отсутствии.
-3. Проверить sync plan и отдельно выполнить apply.
-4. Добавить продуктовые и архитектурные документы, если они помогают текущей работе.
-5. Заменить все placeholders; неизвестное оставить явно неизвестным.
-6. Проверить, что ссылки из локального `AGENTS.md` работают внутри целевого репозитория.
+Из корня checkout хаба выполните:
+
+```powershell
+.\ai-rules.ps1 init -ProjectRoot C:\path\to\project -Profiles standard-product
+```
+
+CLI создаст отсутствующие `AGENTS.md`, `.ai-rules/RULESET.md` и `.ai-rules/PROJECT_RULES.md`, но не перезапишет существующие файлы. Затем заполните placeholders, объедините маршруты с существующими инструкциями и выполните проектный `doctor`, `update`, а после проверки — `update -Apply`. Полный пользовательский сценарий находится в корневом [`README.md`](../README.md).
 
 Managed-правила находятся только в `.ai-rules/upstream/`; `.ai-rules/RULESET.md` и `.ai-rules/PROJECT_RULES.md` принадлежат проекту и не перезаписываются синхронизацией. Git submodule, remote fetch и автоматический rollout пока не используются.
 
@@ -27,3 +28,17 @@ Managed-правила находятся только в `.ai-rules/upstream/`;
 | [`RESEARCH.md`](RESEARCH.md) | spike, аудит, неизвестный API или evidence-driven выбор |
 
 Не создавать все документы заранее. Каждый файл должен иметь владельца вопроса и реальную функцию.
+
+## Низкоуровневое использование
+
+Для отладки или интеграции initializer можно вызвать напрямую:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/init-project-sync.ps1 `
+  -ProjectRoot C:\path\to\project `
+  -Profiles standard-product `
+  -SeedProjectFiles
+```
+
+Manifest также можно создать вручную по [`../sync/project-manifest.example.json`](../sync/project-manifest.example.json). После этого применяются низкоуровневые `Plan`/`Apply` из [`../sync/README.md`](../sync/README.md). Этот путь не заменяет пользовательский CLI и требует самостоятельной проверки revision и файлов проекта.
