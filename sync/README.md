@@ -1,14 +1,29 @@
 # Синхронизация правил с проектами
 
-Для обычных операций используй корневой [`ai-rules.ps1`](../ai-rules.ps1):
+## Обычное использование
+
+Для обычных операций используйте корневой [`ai-rules.ps1`](../ai-rules.ps1) из корня checkout хаба:
 
 - `init` — первичное подключение;
 - `status` — состояние проекта;
 - `plan` — план текущей pinned revision;
-- `apply` — применение текущей pinned revision;
+- `apply` — повторное применение текущей pinned revision;
 - `update` — переход на текущую revision checkout хаба.
 
-Команды ниже остаются поддерживаемым низкоуровневым интерфейсом и описывают полный sync-контракт. Корневой CLI вызывает эти скрипты и не создаёт второй механизм синхронизации.
+Типичный маршрут:
+
+```powershell
+.\ai-rules.ps1 init -ProjectRoot C:\path\to\project -Profiles standard-product
+.\ai-rules.ps1 doctor -ProjectRoot C:\path\to\project
+.\ai-rules.ps1 update -ProjectRoot C:\path\to\project
+.\ai-rules.ps1 update -ProjectRoot C:\path\to\project -Apply
+```
+
+Инструкция для обычного пользователя находится в корневом [`README.md`](../README.md).
+
+## Низкоуровневый sync-контракт
+
+Прямые команды ниже нужны для отладки и интеграции. Корневой CLI вызывает те же initializer и sync-скрипты и не создаёт второй механизм синхронизации.
 
 Версия manifest/lock `0.2` использует локальную pull-модель:
 
