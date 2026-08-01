@@ -88,6 +88,10 @@ try {
     $agentsTemplate = Get-Content -LiteralPath (Join-Path $hubRoot 'templates/AGENTS.md') -Raw -Encoding UTF8
     $projectRulesTemplate = Get-Content -LiteralPath (Join-Path $hubRoot 'templates/PROJECT_RULES.md') -Raw -Encoding UTF8
     $fullProjectRulesTemplate = Get-Content -LiteralPath (Join-Path $hubRoot 'templates/PROJECT_RULES.full.md') -Raw -Encoding UTF8
+    $rulesetTemplate = Get-Content -LiteralPath (Join-Path $hubRoot 'templates/RULESET.md') -Raw -Encoding UTF8
+    $profilesReadme = Get-Content -LiteralPath (Join-Path $hubRoot 'profiles/README.md') -Raw -Encoding UTF8
+    $publicRepositoryProfile = Get-Content -LiteralPath (Join-Path $hubRoot 'profiles/public-repository.md') -Raw -Encoding UTF8
+    $aiCollaborationRule = Get-Content -LiteralPath (Join-Path $hubRoot 'rules/AI_COLLABORATION.md') -Raw -Encoding UTF8
     $profileFiles = Get-ChildItem -LiteralPath (Join-Path $hubRoot 'profiles') -File -Filter '*.md' | Where-Object { $_.Name -ne 'README.md' }
     $standardProductProfile = Get-Content -LiteralPath (Join-Path $hubRoot 'profiles/standard-product.md') -Raw -Encoding UTF8
     $dataSensitiveProfile = Get-Content -LiteralPath (Join-Path $hubRoot 'profiles/data-sensitive.md') -Raw -Encoding UTF8
@@ -108,8 +112,17 @@ try {
     $topicsIndex = $agentsTemplate.IndexOf('.ai-rules/upstream/rules/')
     Assert-True -Condition ($rulesetIndex -ge 0 -and $rulesetIndex -lt $projectRulesIndex -and $projectRulesIndex -lt $coreIndex -and $coreIndex -lt $profilesIndex -and $profilesIndex -lt $topicsIndex) -Message 'agent template must route RULESET, project rules, core, profiles, then task topics'
     Assert-True -Condition ($agentsTemplate -match 'не весь `upstream/`' -and $agentsTemplate -match 'PROJECT_STUDY\.md.*явном выборе') -Message 'agent template must forbid whole-upstream reading and route project-study explicitly'
+    Assert-True -Condition ($agentsTemplate -match 'Подключение хаба разрешает менять только' -and $agentsTemplate -match 'не разрешает менять несвязанные код, документацию, CI, лицензию или настройки' -and $agentsTemplate -match 'зафиксируй в `RULESET\.md`') -Message 'agent template must provide a scope firewall for hub adoption'
     Assert-True -Condition (([regex]::Matches($projectRulesTemplate, '(?m)^## ')).Count -eq 6 -and $projectRulesTemplate.Length -lt 2500 -and $projectRulesTemplate -notmatch '\|.*\|.*\|') -Message 'default project rules template must stay minimal'
     Assert-True -Condition ($fullProjectRulesTemplate -match 'docs/README\.md' -and $fullProjectRulesTemplate -match '\|.*\|.*\|') -Message 'full project rules template must retain detailed routing content'
+    foreach ($projectTemplate in @($projectRulesTemplate, $fullProjectRulesTemplate)) {
+        Assert-True -Condition ($projectTemplate -match 'не установлен' -and $projectTemplate -match 'не установлена' -and $projectTemplate -match 'Не создавай документацию, tooling или CI' -and $projectTemplate -match 'RULESET\.md') -Message 'project rules templates must describe missing sources without creating them during adoption'
+    }
+    Assert-True -Condition ($rulesetTemplate -match 'не локальное исключение' -and $rulesetTemplate -match 'не разрешение на исправление' -and $rulesetTemplate -match 'правило.*наблюдаемое несоответствие.*evidence.*риск.*триггер возврата' -and $rulesetTemplate -match 'неизвестно') -Message 'RULESET deferred gaps must be evidence records, not remediation permission'
+    Assert-True -Condition ($profilesReadme -match 'новым и изменяемым файлам' -and $profilesReadme -match 'внешним действием.*gate' -and $profilesReadme -match 'не разрешает аудит всего репозитория') -Message 'profile guidance must be prospective and action-gated'
+    Assert-True -Condition ($publicRepositoryProfile -match '(?m)^### Постоянные инварианты\s*$' -and $publicRepositoryProfile -match '(?m)^### Гейты внешнего действия\s*$' -and $publicRepositoryProfile -match 'Существующие несоответствия.*разрывами внедрения' -and $publicRepositoryProfile -match 'LICENSE.*CONTRIBUTING.*security policy') -Message 'public profile must separate ongoing invariants, external-action gates, and adoption gaps'
+    Assert-True -Condition ($documentationRule -match 'маршрутов.*не является аудитом' -and $documentationRule -match 'аудит не даёт разрешения на remediation' -and $documentationRule -match 'выбор темы документации не запускает полный inventory') -Message 'documentation routing and audit must not authorize remediation'
+    Assert-True -Condition ($aiCollaborationRule -match 'baseline-review.*read-only' -and $aiCollaborationRule -match 'remediation.*выбора владельцем' -and $aiCollaborationRule -match 'не превращает найденное несоответствие в новую подзадачу') -Message 'AI collaboration must keep connection, review, and remediation separate'
     Assert-True -Condition ($hubProjectRules -match '\.\./profiles/public-repository\.md' -and $hubProjectRules -match 'maintainer-led') -Message 'hub project rules must apply the public repository profile explicitly'
     Assert-True -Condition ($securityRule -match 'Issues' -and $securityRule -match 'AGENTS\.md' -and $securityRule -match 'connector context') -Message 'security rule must treat public input and agent instructions as trust-boundary concerns'
     Assert-True -Condition ($deliveryRule -match '(?m)^## Supply chain\s*$' -and $deliveryRule -match 'граф зависимостей' -and $deliveryRule -match 'Публикуемый артефакт' -and $deliveryRule -match 'пропорциональ') -Message 'delivery rule must structurally cover dependencies, published artifacts, and proportional supply-chain safeguards'
@@ -212,6 +225,7 @@ try {
         'init', '-ProjectRoot', $cliProjectRoot, '-Profiles', 'standard-product'
     )
     Assert-True -Condition ($cliInit.ExitCode -eq 0) -Message "CLI init must pass: $($cliInit.Output)"
+    Assert-True -Condition ($cliInit.Output -match 'Следующий шаг ограничен AGENTS\.md, RULESET\.md и PROJECT_RULES\.md' -and $cliInit.Output -match 'Не исправляйте код, документацию, CI, лицензию или настройки проекта') -Message 'CLI init must state the initial adoption scope'
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $cliProjectRoot '.ai-rules/manifest.json')) -Message 'CLI init must create manifest'
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $cliProjectRoot 'AGENTS.md')) -Message 'CLI init must seed AGENTS.md by default'
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $cliProjectRoot '.ai-rules/RULESET.md')) -Message 'CLI init must seed RULESET.md by default'
@@ -242,6 +256,7 @@ try {
     $cliDoctorBefore = Get-TreeSnapshot -Root $cliProjectRoot
     $cliDoctor = Invoke-HubScript -ScriptPath $cliPath -Arguments @('doctor', '-ProjectRoot', $cliProjectRoot)
     Assert-True -Condition ($cliDoctor.ExitCode -eq 0 -and $cliDoctor.Output -match '\[WARN\]' -and $cliDoctor.Output -match 'placeholder') -Message "project doctor warnings must keep a zero exit code: $($cliDoctor.Output)"
+    Assert-True -Condition ($cliDoctor.Output -match 'целостность подключения AI Rules Hub' -and $cliDoctor.Output -match 'не означает соответствие всего проекта') -Message 'project doctor must distinguish integration integrity from project compliance'
     Assert-True -Condition ((Get-TreeSnapshot -Root $cliProjectRoot) -eq $cliDoctorBefore) -Message 'project doctor must be read-only'
 
     $syncPath = Join-Path $hubRoot 'scripts/sync-rules.ps1'
@@ -266,24 +281,34 @@ try {
     $existingFilesProjectRoot = Join-Path $tempRoot 'project with existing local files'
     $existingFilesRulesRoot = Join-Path $existingFilesProjectRoot '.ai-rules'
     New-Item -ItemType Directory -Path $existingFilesRulesRoot -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $existingFilesProjectRoot 'docs'), (Join-Path $existingFilesProjectRoot 'src') -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $existingFilesProjectRoot 'README.md') -Value "# Existing project`n`nKeep this public entry point unchanged." -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $existingFilesProjectRoot 'docs/guide.md') -Value "# Existing guide`n`nCanonical project documentation." -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $existingFilesProjectRoot 'src/main.txt') -Value 'existing source bytes' -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $existingFilesProjectRoot 'AGENTS.md') -Value '# Existing agent rules' -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $existingFilesRulesRoot 'RULESET.md') -Value '# Existing ruleset' -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $existingFilesRulesRoot 'PROJECT_RULES.md') -Value '# Existing project rules' -Encoding UTF8
-    $existingFilesInit = Invoke-HubScript -ScriptPath $initializerPath -Arguments @(
-        '-ProjectRoot', $existingFilesProjectRoot,
-        '-Profiles', 'standard-product',
-        '-SeedProjectFiles'
-    )
+    $existingProjectSurfacePaths = @('README.md', 'docs/guide.md', 'src/main.txt')
+    $existingProjectSurfaceBefore = @($existingProjectSurfacePaths | ForEach-Object { [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $existingFilesProjectRoot $_))) })
+    $existingFilesInit = Invoke-HubScript -ScriptPath $cliPath -Arguments @('init', '-ProjectRoot', $existingFilesProjectRoot, '-Profiles', 'standard-product')
     Assert-True -Condition ($existingFilesInit.ExitCode -eq 0) -Message "initializer must support an existing local rules directory: $($existingFilesInit.Output)"
     Assert-True -Condition (([regex]::Matches($existingFilesInit.Output, '\[SKIP\]')).Count -eq 3) -Message 'initializer must report each preserved local file explicitly'
     Assert-True -Condition ((Get-Content -LiteralPath (Join-Path $existingFilesProjectRoot 'AGENTS.md') -Raw -Encoding UTF8).Trim() -eq '# Existing agent rules') -Message 'initializer must preserve existing root AGENTS.md'
     Assert-True -Condition ((Get-Content -LiteralPath (Join-Path $existingFilesRulesRoot 'RULESET.md') -Raw -Encoding UTF8).Trim() -eq '# Existing ruleset') -Message 'initializer must preserve existing local RULESET.md'
     Assert-True -Condition ((Get-Content -LiteralPath (Join-Path $existingFilesRulesRoot 'PROJECT_RULES.md') -Raw -Encoding UTF8).Trim() -eq '# Existing project rules') -Message 'initializer must preserve existing local PROJECT_RULES.md'
+    $existingProjectSurfaceAfterInit = @($existingProjectSurfacePaths | ForEach-Object { [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $existingFilesProjectRoot $_))) })
+    Assert-True -Condition (($existingProjectSurfaceAfterInit -join "`n") -eq ($existingProjectSurfaceBefore -join "`n")) -Message 'CLI init must preserve existing README, docs, and source byte-for-byte'
     $existingFilesSnapshot = Get-TreeSnapshot -Root $existingFilesProjectRoot
     $existingFilesDoctor = Invoke-HubScript -ScriptPath $cliPath -Arguments @('doctor', '-ProjectRoot', $existingFilesProjectRoot)
     Assert-True -Condition ($existingFilesDoctor.ExitCode -eq 0 -and $existingFilesDoctor.Output -match '\[WARN\]' -and $existingFilesDoctor.Output -match 'AGENTS\.md') -Message 'missing AGENTS routes must be a warning with zero exit code'
     Assert-True -Condition ($existingFilesDoctor.Output -match 'AGENTS\.md пока не подключает выбранные профили') -Message 'unpinned project must warn when selected profiles are not routed'
     Assert-True -Condition ((Get-TreeSnapshot -Root $existingFilesProjectRoot) -eq $existingFilesSnapshot) -Message 'profile-routing warning must remain read-only'
+    $existingFilesStatus = Invoke-HubScript -ScriptPath $cliPath -Arguments @('status', '-ProjectRoot', $existingFilesProjectRoot)
+    $existingFilesPlan = Invoke-HubScript -ScriptPath $cliPath -Arguments @('plan', '-ProjectRoot', $existingFilesProjectRoot)
+    Assert-True -Condition ($existingFilesStatus.ExitCode -eq 0 -and $existingFilesPlan.ExitCode -eq 0) -Message 'status and preliminary plan must work for the existing-project fixture'
+    Assert-True -Condition ((Get-TreeSnapshot -Root $existingFilesProjectRoot) -eq $existingFilesSnapshot) -Message 'doctor, status, and read-only plan must not change the existing-project fixture'
+    $existingProjectSurfaceAfterReads = @($existingProjectSurfacePaths | ForEach-Object { [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $existingFilesProjectRoot $_))) })
+    Assert-True -Condition (($existingProjectSurfaceAfterReads -join "`n") -eq ($existingProjectSurfaceBefore -join "`n")) -Message 'doctor, status, and plan must preserve existing README, docs, and source byte-for-byte'
 
     $legacyProjectRoot = Join-Path $tempRoot 'legacy project'
     New-Item -ItemType Directory -Path $legacyProjectRoot | Out-Null

@@ -26,6 +26,7 @@ $requiredPaths = @(
     'hub/ARCHITECTURE.md',
     'hub/COMMIT_RULES.md',
     'hub/decisions/0002-rule-profile-and-playbook-boundaries.md',
+    'hub/decisions/0003-non-invasive-project-adoption.md',
     'profiles/README.md',
     'templates/README.md',
     'templates/PROJECT_RULES.full.md',
