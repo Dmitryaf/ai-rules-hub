@@ -80,11 +80,14 @@ New-Item -ItemType Directory -Path $tempRoot | Out-Null
 
 try {
     $documentationRule = Get-Content -LiteralPath (Join-Path $hubRoot 'rules/DOCUMENTATION.md') -Raw -Encoding UTF8
+    $coreRule = Get-Content -LiteralPath (Join-Path $hubRoot 'rules/CORE.md') -Raw -Encoding UTF8
+    $projectStudyRule = Get-Content -LiteralPath (Join-Path $hubRoot 'rules/PROJECT_STUDY.md') -Raw -Encoding UTF8
+    $reliabilityRule = Get-Content -LiteralPath (Join-Path $hubRoot 'rules/RELIABILITY_AND_OPERATIONS.md') -Raw -Encoding UTF8
+    $rulesReadme = Get-Content -LiteralPath (Join-Path $hubRoot 'rules/README.md') -Raw -Encoding UTF8
     $agentsTemplate = Get-Content -LiteralPath (Join-Path $hubRoot 'templates/AGENTS.md') -Raw -Encoding UTF8
     $projectRulesTemplate = Get-Content -LiteralPath (Join-Path $hubRoot 'templates/PROJECT_RULES.md') -Raw -Encoding UTF8
     $fullProjectRulesTemplate = Get-Content -LiteralPath (Join-Path $hubRoot 'templates/PROJECT_RULES.full.md') -Raw -Encoding UTF8
-    $standardProductProfile = Get-Content -LiteralPath (Join-Path $hubRoot 'profiles/standard-product.md') -Raw -Encoding UTF8
-    $publicRepositoryProfile = Get-Content -LiteralPath (Join-Path $hubRoot 'profiles/public-repository.md') -Raw -Encoding UTF8
+    $profileFiles = Get-ChildItem -LiteralPath (Join-Path $hubRoot 'profiles') -File -Filter '*.md' | Where-Object { $_.Name -ne 'README.md' }
     $securityRule = Get-Content -LiteralPath (Join-Path $hubRoot 'rules/SECURITY_AND_PRIVACY.md') -Raw -Encoding UTF8
     $deliveryRule = Get-Content -LiteralPath (Join-Path $hubRoot 'rules/GIT_AND_DELIVERY.md') -Raw -Encoding UTF8
     $hubProjectRules = Get-Content -LiteralPath (Join-Path $hubRoot 'hub/PROJECT_RULES.md') -Raw -Encoding UTF8
@@ -92,27 +95,41 @@ try {
     $hubCheck = Get-Content -LiteralPath (Join-Path $hubRoot 'scripts/check-hub.ps1') -Raw -Encoding UTF8
     $catalog = Get-Content -LiteralPath (Join-Path $hubRoot 'sync/catalog.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 
-    Assert-True -Condition ($documentationRule -match 'docs/README\.md' -and $documentationRule -match 'docs/research/' -and $documentationRule -match 'docs/archive/') -Message 'documentation rule must define index, research, and archive roles'
-    Assert-True -Condition ($documentationRule -match '(?s)PRODUCT\.md.*ARCHITECTURE\.md.*ROADMAP\.md') -Message 'documentation rule must define canonical current-state documents'
-    Assert-True -Condition (([regex]::Matches($documentationRule, 'docs/README\.md')).Count -ge 3) -Message 'documentation creation and audit must route through an index'
-    Assert-True -Condition ($documentationRule -match 'PROJECT_RULES\.md' -and $documentationRule -match 'keep / merge / move / archive / delete / unknown') -Message 'documentation rule must define project routing and audit plan'
-    Assert-True -Condition ($agentsTemplate -match 'PROJECT_RULES\.md' -and $agentsTemplate -match 'docs/README\.md') -Message 'agent template must route documentation through project rules and index'
+    Assert-True -Condition ($documentationRule -match 'inventory.*classify.*choose canonical source.*keep/merge/move/archive/delete.*verify links') -Message 'documentation rule must keep the compact audit flow'
+    $rulesetIndex = $agentsTemplate.IndexOf('.ai-rules/RULESET.md')
+    $projectRulesIndex = $agentsTemplate.IndexOf('.ai-rules/PROJECT_RULES.md')
+    $coreIndex = $agentsTemplate.IndexOf('.ai-rules/upstream/CORE.md')
+    $profilesIndex = $agentsTemplate.IndexOf('.ai-rules/upstream/profiles/')
+    $topicsIndex = $agentsTemplate.IndexOf('.ai-rules/upstream/rules/')
+    Assert-True -Condition ($rulesetIndex -ge 0 -and $rulesetIndex -lt $projectRulesIndex -and $projectRulesIndex -lt $coreIndex -and $coreIndex -lt $profilesIndex -and $profilesIndex -lt $topicsIndex) -Message 'agent template must route RULESET, project rules, core, profiles, then task topics'
+    Assert-True -Condition ($agentsTemplate -match 'не весь `upstream/`' -and $agentsTemplate -match 'PROJECT_STUDY\.md.*явном выборе') -Message 'agent template must forbid whole-upstream reading and route project-study explicitly'
     Assert-True -Condition (([regex]::Matches($projectRulesTemplate, '(?m)^## ')).Count -eq 6 -and $projectRulesTemplate.Length -lt 2500 -and $projectRulesTemplate -notmatch '\|.*\|.*\|') -Message 'default project rules template must stay minimal'
     Assert-True -Condition ($fullProjectRulesTemplate -match 'docs/README\.md' -and $fullProjectRulesTemplate -match '\|.*\|.*\|') -Message 'full project rules template must retain detailed routing content'
-    Assert-True -Condition ($standardProductProfile -match '\.\./rules/DOCUMENTATION\.md' -and $standardProductProfile -match 'docs/README\.md') -Message 'standard-product must include documentation rule and recommend an index'
     Assert-True -Condition ($hubProjectRules -match '\.\./profiles/public-repository\.md' -and $hubProjectRules -match 'maintainer-led') -Message 'hub project rules must apply the public repository profile explicitly'
-    Assert-True -Condition ($publicRepositoryProfile -match 'LICENSE|license' -and $publicRepositoryProfile -match 'third-party' -and $publicRepositoryProfile -match 'contributions' -and $publicRepositoryProfile -match 'Repository settings') -Message 'public repository profile must cover licensing, attribution, contributions, and settings'
     Assert-True -Condition ($securityRule -match 'Issues' -and $securityRule -match 'AGENTS\.md' -and $securityRule -match 'connector context') -Message 'security rule must treat public input and agent instructions as trust-boundary concerns'
-    Assert-True -Condition ($deliveryRule -match 'GitHub Actions' -and $deliveryRule -match 'commit SHA' -and $deliveryRule -match 'pull_request_target' -and $deliveryRule -match 'workflow_run') -Message 'delivery rule must define safe GitHub Actions defaults'
+    Assert-True -Condition ($deliveryRule -match 'Lockfile' -and $deliveryRule -match 'provenance' -and $deliveryRule -match 'SBOM' -and $deliveryRule -match 'не обязательны') -Message 'delivery rule must define proportional supply-chain safeguards'
     Assert-True -Condition ($validationWorkflow -match '(?m)^permissions:\s*\r?\n\s+contents:\s*read\s*$' -and $validationWorkflow -match 'actions/checkout@[0-9a-f]{40}' -and $validationWorkflow -match 'persist-credentials:\s*false') -Message 'validation workflow must be read-only and use pinned checkout without persisted credentials'
     Assert-True -Condition ((Test-Path -LiteralPath (Join-Path $hubRoot 'CONTRIBUTING.md')) -and (Test-Path -LiteralPath (Join-Path $hubRoot '.github/SECURITY.md'))) -Message 'public repository entry points must exist'
     Assert-True -Condition ($hubCheck -match 'LICENSE\.md' -and $hubCheck -match 'GitHub-discoverable CONTRIBUTING' -and $hubCheck -match 'full 40-character commit SHA') -Message 'hub check must enforce public repository hygiene'
     foreach ($topicProperty in $catalog.topics.PSObject.Properties) {
         Assert-True -Condition (-not [string]::IsNullOrWhiteSpace([string]$topicProperty.Value.file) -and -not [string]::IsNullOrWhiteSpace([string]$topicProperty.Value.description)) -Message "catalog topic '$($topicProperty.Name)' must have file and description"
     }
+    Assert-True -Condition ($catalog.schemaVersion -eq '0.1' -and $catalog.topics.'reliability-and-operations'.file -eq 'rules/RELIABILITY_AND_OPERATIONS.md') -Message 'catalog schema must stay 0.1 and include reliability in stable topic order'
+    $topicNames = @($catalog.topics.PSObject.Properties.Name)
+    Assert-True -Condition ([Array]::IndexOf($topicNames, 'reliability-and-operations') -eq ([Array]::IndexOf($topicNames, 'quality') + 1)) -Message 'reliability topic must keep its stable catalog position after quality'
+    Assert-True -Condition ($rulesReadme -match 'RELIABILITY_AND_OPERATIONS\.md' -and $rulesReadme -match 'task playbook') -Message 'rules index must list reliability and explain topic versus task playbook'
     foreach ($profileProperty in $catalog.profiles.PSObject.Properties) {
-        Assert-True -Condition (-not [string]::IsNullOrWhiteSpace([string]$profileProperty.Value.description)) -Message "catalog profile '$($profileProperty.Name)' must have description"
+        Assert-True -Condition (-not [string]::IsNullOrWhiteSpace([string]$profileProperty.Value.description) -and -not [string]::IsNullOrWhiteSpace([string]$profileProperty.Value.file) -and @($profileProperty.Value.topics).Count -gt 0) -Message "catalog profile '$($profileProperty.Name)' must define description, source file, and topic composition"
+        $profileContent = Get-Content -LiteralPath (Join-Path $hubRoot ([string]$profileProperty.Value.file)) -Raw -Encoding UTF8
+        Assert-True -Condition ($profileContent -match '(?m)^## Назначение\s*$' -and $profileContent -match '(?m)^## Уникальные обязательства\s*$') -Message "profile '$($profileProperty.Name)' must contain purpose and unique obligations"
+        Assert-True -Condition ($profileContent -notmatch '(?m)^##? Подключить' -and $profileContent -notmatch '\.\./rules/') -Message "profile '$($profileProperty.Name)' must not duplicate catalog composition"
     }
+    Assert-True -Condition (@($profileFiles).Count -eq @($catalog.profiles.PSObject.Properties).Count) -Message 'every profile file must be represented in the catalog'
+    Assert-True -Condition ($coreRule.Trim().Length -gt 0 -and $coreRule -notmatch '\|\s*---' -and $coreRule -notmatch 'PowerShell|npm|CLI|workflow|vertical slice|матриц') -Message 'core must stay nonempty and free of stack, CLI, tables, and task workflow details'
+    Assert-True -Condition (([regex]::Matches($coreRule, '(?m)^## \d+\. ')).Count -eq 10) -Message 'core must contain exactly ten universal invariants'
+    Assert-True -Condition ($projectStudyRule -match 'read-only' -and $projectStudyRule -match 'факт.*вероятный вывод.*неизвестное.*оценка' -and $projectStudyRule -match 'язык следует локальным правилам или запросу') -Message 'project-study must keep source read-only and distinguish evidence statuses without a universal language'
+    Assert-True -Condition ($projectStudyRule -notmatch '\.project-study/' -and $projectStudyRule -notmatch '13' -and $projectStudyRule -notmatch '(?m)^```') -Message 'project-study must not impose a universal folder, fixed file count, or long prompt templates'
+    Assert-True -Condition ($reliabilityRule -match 'readiness' -and $reliabilityRule -match 'restore' -and $reliabilityRule -match 'stale' -and $reliabilityRule -match 'не входит в стандартный') -Message 'reliability topic must cover operability, recovery, degradation, and opt-in scope'
 
     $cliPath = Join-Path $hubRoot 'ai-rules.ps1'
     $helpResult = Invoke-HubScript -ScriptPath $cliPath -Arguments @('help')
@@ -120,7 +137,7 @@ try {
     $profilesResult = Invoke-HubScript -ScriptPath $cliPath -Arguments @('list', 'profiles')
     Assert-True -Condition ($profilesResult.ExitCode -eq 0 -and $profilesResult.Output -match 'profiles/standard-product\.md' -and $profilesResult.Output.Contains([string]$catalog.profiles.'standard-product'.description)) -Message 'CLI profile list must use catalog descriptions'
     $topicsResult = Invoke-HubScript -ScriptPath $cliPath -Arguments @('list', 'topics')
-    Assert-True -Condition ($topicsResult.ExitCode -eq 0 -and $topicsResult.Output -match 'rules/PRODUCT\.md' -and $topicsResult.Output.Contains([string]$catalog.topics.product.description)) -Message 'CLI topic list must use catalog descriptions'
+    Assert-True -Condition ($topicsResult.ExitCode -eq 0 -and $topicsResult.Output -match 'rules/PRODUCT\.md' -and $topicsResult.Output -match 'rules/RELIABILITY_AND_OPERATIONS\.md' -and $topicsResult.Output.Contains([string]$catalog.topics.product.description) -and $topicsResult.Output.Contains([string]$catalog.topics.'reliability-and-operations'.description)) -Message 'CLI topic list must use catalog descriptions and include reliability'
     $unknownCommandResult = Invoke-HubScript -ScriptPath $cliPath -Arguments @('unknown-command')
     Assert-True -Condition ($unknownCommandResult.ExitCode -ne 0 -and $unknownCommandResult.Output -match 'unknown-command') -Message 'unknown CLI command must fail clearly'
     $missingProjectRootResult = Invoke-HubScript -ScriptPath $cliPath -Arguments @('status')
@@ -214,6 +231,8 @@ try {
     $syncPath = Join-Path $hubRoot 'scripts/sync-rules.ps1'
     $cliLowLevelApply = Invoke-HubScript -ScriptPath $syncPath -Arguments @('-ProjectRoot', $cliProjectRoot, '-Mode', 'Apply')
     Assert-True -Condition ($cliLowLevelApply.ExitCode -eq 0) -Message "low-level Apply must retain the unpinned recovery contract: $($cliLowLevelApply.Output)"
+    Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $cliProjectRoot '.ai-rules/upstream/rules/RELIABILITY_AND_OPERATIONS.md'))) -Message 'standard-product must not pull reliability without an explicit topic'
+    Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $cliProjectRoot '.ai-rules/upstream/rules/PROJECT_STUDY.md'))) -Message 'standard-product must not pull project-study without an explicit topic'
     $cliManifestPath = Join-Path $cliProjectRoot '.ai-rules/manifest.json'
     $cliManifest = Get-Content -LiteralPath $cliManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $currentHubRevision = (& git -C $hubRoot rev-parse HEAD).Trim()
@@ -261,7 +280,7 @@ try {
 
     $initResult = Invoke-HubScript -ScriptPath $initializerPath -Arguments @(
         '-ProjectRoot', $projectRoot,
-        '-Topics', 'project-study',
+        '-Topics', 'reliability-and-operations',
         '-Profiles', 'standard-product',
         '-SeedProjectFiles'
     )
@@ -308,7 +327,8 @@ try {
     Assert-True -Condition (Test-Path -LiteralPath $managedProfilePath) -Message 'sync must copy selected profile'
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $upstreamRoot 'rules/PRODUCT.md')) -Message 'profile must pull topic dependencies'
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $upstreamRoot 'rules/DOCUMENTATION.md')) -Message 'standard-product must pull documentation architecture rule'
-    Assert-True -Condition (Test-Path -LiteralPath (Join-Path $upstreamRoot 'rules/PROJECT_STUDY.md')) -Message 'sync must copy explicitly selected project-study topic'
+    Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $upstreamRoot 'rules/PROJECT_STUDY.md'))) -Message 'sync must not copy project-study without an explicit selection'
+    Assert-True -Condition (Test-Path -LiteralPath (Join-Path $upstreamRoot 'rules/RELIABILITY_AND_OPERATIONS.md')) -Message 'sync must copy explicitly selected reliability topic'
     Assert-True -Condition (Test-Path -LiteralPath $lockPath) -Message 'apply must create lock'
     Assert-True -Condition ((Get-Content -LiteralPath (Join-Path $projectRoot 'AGENTS.md') -Raw -Encoding UTF8).Trim() -eq '# Local agent rules') -Message 'apply must not overwrite local AGENTS.md'
     Assert-True -Condition ([System.IO.File]::ReadAllText($manifestPath) -eq $manifestBeforeSync) -Message 'apply must not overwrite manifest'
@@ -404,6 +424,8 @@ try {
     Assert-True -Condition ($cleanInit.ExitCode -eq 0) -Message "clean CLI init must pass: $($cleanInit.Output)"
     $cleanInitialApply = Invoke-HubScript -ScriptPath $cleanCliPath -Arguments @('update', '-ProjectRoot', $updateProjectRoot, '-Apply')
     Assert-True -Condition ($cleanInitialApply.ExitCode -eq 0) -Message "first update -Apply must pin and synchronize the project: $($cleanInitialApply.Output)"
+    Assert-True -Condition (Test-Path -LiteralPath (Join-Path $updateProjectRoot '.ai-rules/upstream/rules/PROJECT_STUDY.md')) -Message 'sync must copy explicitly selected project-study topic'
+    Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $updateProjectRoot '.ai-rules/upstream/rules/RELIABILITY_AND_OPERATIONS.md'))) -Message 'project-study selection must not pull reliability implicitly'
 
     $updateManifestPath = Join-Path $updateProjectRoot '.ai-rules/manifest.json'
     $updateLockPath = Join-Path $updateProjectRoot '.ai-rules/lock.json'
