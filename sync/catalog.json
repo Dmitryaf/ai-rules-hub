@@ -18,6 +18,10 @@
       "file": "rules/QUALITY.md",
       "description": "Тестирование, проверки и критерии завершения изменений."
     },
+    "reliability-and-operations": {
+      "file": "rules/RELIABILITY_AND_OPERATIONS.md",
+      "description": "Работоспособность, деградация, наблюдаемость, восстановление и производительность эксплуатируемых систем."
+    },
     "security-and-privacy": {
       "file": "rules/SECURITY_AND_PRIVACY.md",
       "description": "Секреты, доступ, чувствительные данные и граница публичного контекста."

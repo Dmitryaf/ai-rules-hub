@@ -143,13 +143,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 
 Хаб не нужен. Агент читает:
 
-1. корневой `AGENTS.md`;
-2. `.ai-rules/RULESET.md`;
-3. `.ai-rules/PROJECT_RULES.md`;
-4. `.ai-rules/upstream/CORE.md`;
-5. только относящиеся к текущей задаче правила из `.ai-rules/upstream/rules/` и выбранные профили.
+1. `.ai-rules/RULESET.md` по маршруту из корневого `AGENTS.md`;
+2. `.ai-rules/PROJECT_RULES.md`;
+3. `.ai-rules/upstream/CORE.md`;
+4. все выбранные профили из `.ai-rules/upstream/profiles/`;
+5. только относящиеся к текущей задаче правила из `.ai-rules/upstream/rules/`;
+6. релевантные проектные документы, код и тесты.
 
-Не читать весь `upstream/` перед каждой задачей. Общие правила не редактируются внутри проекта; проектная специфика меняется в `.ai-rules/PROJECT_RULES.md`, исключения — в `.ai-rules/RULESET.md`.
+Точный состав определяется manifest, lock и status. Не читать весь `upstream/` или все темы профиля перед каждой задачей. `PROJECT_STUDY.md` применяется только при явном выборе темы и соответствующей задаче. Общие правила не редактируются внутри проекта; проектная специфика меняется в `.ai-rules/PROJECT_RULES.md`, исключения — в `.ai-rules/RULESET.md`.
 
 ## 5. Обновление общих правил
 
