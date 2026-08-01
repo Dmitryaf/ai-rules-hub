@@ -18,6 +18,7 @@ Managed-правила находятся только в `.ai-rules/upstream/`;
 | [`AGENTS.md`](AGENTS.md) | всегда |
 | [`RULESET.md`](RULESET.md) → `.ai-rules/RULESET.md` | всегда |
 | [`PROJECT_RULES.md`](PROJECT_RULES.md) → `.ai-rules/PROJECT_RULES.md` | всегда |
+| [`PROJECT_RULES.full.md`](PROJECT_RULES.full.md) | расширенная замена минимального project rules, когда реально нужны подробные источники истины и маршрутизация |
 | [`PRODUCT.md`](PRODUCT.md) | пользовательский продукт |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | проект с устойчивыми техническими границами |
 | [`PROJECT_KNOWLEDGE.md`](PROJECT_KNOWLEDGE.md) | длительный проект с частыми паузами/сессиями |

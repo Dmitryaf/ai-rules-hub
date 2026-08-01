@@ -4,7 +4,11 @@ param(
     [string]$ProjectRoot,
 
     [ValidateSet('Plan', 'Apply')]
-    [string]$Mode = 'Plan'
+    [string]$Mode = 'Plan',
+
+    [string]$RevisionOverride,
+
+    [switch]$FailOnConflict
 )
 
 $ErrorActionPreference = 'Stop'
@@ -191,6 +195,22 @@ if ($null -ne $manifest.source -and $null -ne $manifest.source.revision) {
     $expectedRevision = [string]$manifest.source.revision
 }
 
+if (-not [string]::IsNullOrWhiteSpace($RevisionOverride)) {
+    if ($Mode -ne 'Plan') {
+        throw 'RevisionOverride is supported only in Plan mode.'
+    }
+    if ($RevisionOverride -notmatch '^[0-9a-fA-F]{40}$') {
+        throw 'RevisionOverride must be a full 40-character Git commit SHA.'
+    }
+    if ([string]::IsNullOrWhiteSpace($revision)) {
+        throw 'RevisionOverride was provided, but the hub Git revision cannot be determined.'
+    }
+    if ($revision -ne $RevisionOverride) {
+        throw "RevisionOverride must match the current hub checkout. Expected $RevisionOverride, got $revision."
+    }
+    $expectedRevision = $RevisionOverride
+}
+
 if (-not [string]::IsNullOrWhiteSpace($expectedRevision)) {
     if ($expectedRevision -notmatch '^[0-9a-fA-F]{40}$') {
         throw 'Manifest source.revision must be a full 40-character Git commit SHA.'
@@ -321,8 +341,12 @@ Write-Host "Summary: $($summaryParts -join ', ')"
 
 if ($Mode -eq 'Plan') {
     Write-Host 'Plan only: no project files were changed.' -ForegroundColor Green
-    if (@($plan | Where-Object { $_.Action -eq 'conflict' }).Count -gt 0) {
+    $planConflicts = @($plan | Where-Object { $_.Action -eq 'conflict' })
+    if ($planConflicts.Count -gt 0) {
         Write-Host 'Resolve managed-file conflicts before Apply.' -ForegroundColor Yellow
+        if ($FailOnConflict) {
+            throw "Plan stopped: $($planConflicts.Count) managed file conflict(s) require manual resolution."
+        }
     }
     else {
         Write-Host 'Next: review this plan and the selected revision, then run the same command with -Mode Apply.'

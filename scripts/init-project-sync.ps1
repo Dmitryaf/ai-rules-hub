@@ -46,6 +46,25 @@ if ($catalog.schemaVersion -ne '0.1') {
 $availableTopics = @($catalog.topics.PSObject.Properties.Name)
 $availableProfiles = @($catalog.profiles.PSObject.Properties.Name)
 
+$Topics = @(
+    foreach ($topicValue in @($Topics)) {
+        foreach ($topicPart in ([string]$topicValue -split ',')) {
+            if (-not [string]::IsNullOrWhiteSpace($topicPart)) {
+                $topicPart.Trim()
+            }
+        }
+    }
+)
+$Profiles = @(
+    foreach ($profileValue in @($Profiles)) {
+        foreach ($profilePart in ([string]$profileValue -split ',')) {
+            if (-not [string]::IsNullOrWhiteSpace($profilePart)) {
+                $profilePart.Trim()
+            }
+        }
+    }
+)
+
 foreach ($topic in $Topics) {
     if ($topic -notin $availableTopics) {
         throw "Unknown topic '$topic'. Available: $($availableTopics -join ', ')"

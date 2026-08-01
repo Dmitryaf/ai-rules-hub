@@ -37,6 +37,24 @@ function Get-NormalizedSha256 {
     }
 }
 
+function Get-TreeSnapshot {
+    param([Parameter(Mandatory = $true)][string]$Root)
+
+    if (-not (Test-Path -LiteralPath $Root)) {
+        return '<missing>'
+    }
+
+    $rootFull = [System.IO.Path]::GetFullPath($Root).TrimEnd([char[]]@('\', '/'))
+    return (@(
+        Get-ChildItem -LiteralPath $rootFull -Recurse -File |
+            Sort-Object FullName |
+            ForEach-Object {
+                $relativePath = $_.FullName.Substring($rootFull.Length).TrimStart([char[]]@('\', '/')).Replace('\', '/')
+                "$relativePath|$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash)"
+            }
+    ) -join "`n")
+}
+
 function Invoke-HubScript {
     param(
         [Parameter(Mandatory = $true)][string]$ScriptPath,
@@ -64,6 +82,7 @@ try {
     $documentationRule = Get-Content -LiteralPath (Join-Path $hubRoot 'rules/DOCUMENTATION.md') -Raw -Encoding UTF8
     $agentsTemplate = Get-Content -LiteralPath (Join-Path $hubRoot 'templates/AGENTS.md') -Raw -Encoding UTF8
     $projectRulesTemplate = Get-Content -LiteralPath (Join-Path $hubRoot 'templates/PROJECT_RULES.md') -Raw -Encoding UTF8
+    $fullProjectRulesTemplate = Get-Content -LiteralPath (Join-Path $hubRoot 'templates/PROJECT_RULES.full.md') -Raw -Encoding UTF8
     $standardProductProfile = Get-Content -LiteralPath (Join-Path $hubRoot 'profiles/standard-product.md') -Raw -Encoding UTF8
     $publicRepositoryProfile = Get-Content -LiteralPath (Join-Path $hubRoot 'profiles/public-repository.md') -Raw -Encoding UTF8
     $securityRule = Get-Content -LiteralPath (Join-Path $hubRoot 'rules/SECURITY_AND_PRIVACY.md') -Raw -Encoding UTF8
@@ -77,15 +96,32 @@ try {
     Assert-True -Condition (([regex]::Matches($documentationRule, 'docs/README\.md')).Count -ge 3) -Message 'documentation creation and audit must route through an index'
     Assert-True -Condition ($documentationRule -match 'PROJECT_RULES\.md' -and $documentationRule -match 'keep / merge / move / archive / delete / unknown') -Message 'documentation rule must define project routing and audit plan'
     Assert-True -Condition ($agentsTemplate -match 'PROJECT_RULES\.md' -and $agentsTemplate -match 'docs/README\.md') -Message 'agent template must route documentation through project rules and index'
-    Assert-True -Condition ($projectRulesTemplate -match 'docs/README\.md' -and $projectRulesTemplate -match '\|.*\|.*\|') -Message 'project rules template must keep documentation as links and task routing'
+    Assert-True -Condition (([regex]::Matches($projectRulesTemplate, '(?m)^## ')).Count -eq 6 -and $projectRulesTemplate.Length -lt 2500 -and $projectRulesTemplate -notmatch '\|.*\|.*\|') -Message 'default project rules template must stay minimal'
+    Assert-True -Condition ($fullProjectRulesTemplate -match 'docs/README\.md' -and $fullProjectRulesTemplate -match '\|.*\|.*\|') -Message 'full project rules template must retain detailed routing content'
     Assert-True -Condition ($standardProductProfile -match '\.\./rules/DOCUMENTATION\.md' -and $standardProductProfile -match 'docs/README\.md') -Message 'standard-product must include documentation rule and recommend an index'
     Assert-True -Condition ($hubProjectRules -match '\.\./profiles/public-repository\.md' -and $hubProjectRules -match 'maintainer-led') -Message 'hub project rules must apply the public repository profile explicitly'
-    Assert-True -Condition ($publicRepositoryProfile -match 'LICENSE|license' -and $publicRepositoryProfile -match 'third-party' -and $publicRepositoryProfile -match 'contributions' -and $publicRepositoryProfile -match 'Repository settings') -Message 'public repository profile must cover licensing, provenance, contributions, and settings'
+    Assert-True -Condition ($publicRepositoryProfile -match 'LICENSE|license' -and $publicRepositoryProfile -match 'third-party' -and $publicRepositoryProfile -match 'contributions' -and $publicRepositoryProfile -match 'Repository settings') -Message 'public repository profile must cover licensing, attribution, contributions, and settings'
     Assert-True -Condition ($securityRule -match 'Issues' -and $securityRule -match 'AGENTS\.md' -and $securityRule -match 'connector context') -Message 'security rule must treat public input and agent instructions as trust-boundary concerns'
     Assert-True -Condition ($deliveryRule -match 'GitHub Actions' -and $deliveryRule -match 'commit SHA' -and $deliveryRule -match 'pull_request_target' -and $deliveryRule -match 'workflow_run') -Message 'delivery rule must define safe GitHub Actions defaults'
     Assert-True -Condition ($validationWorkflow -match '(?m)^permissions:\s*\r?\n\s+contents:\s*read\s*$' -and $validationWorkflow -match 'actions/checkout@[0-9a-f]{40}' -and $validationWorkflow -match 'persist-credentials:\s*false') -Message 'validation workflow must be read-only and use pinned checkout without persisted credentials'
     Assert-True -Condition ((Test-Path -LiteralPath (Join-Path $hubRoot 'CONTRIBUTING.md')) -and (Test-Path -LiteralPath (Join-Path $hubRoot '.github/SECURITY.md'))) -Message 'public repository entry points must exist'
     Assert-True -Condition ($hubCheck -match 'LICENSE\.md' -and $hubCheck -match 'GitHub-discoverable CONTRIBUTING' -and $hubCheck -match 'full 40-character commit SHA') -Message 'hub check must enforce public repository hygiene'
+
+    $cliPath = Join-Path $hubRoot 'ai-rules.ps1'
+    $helpResult = Invoke-HubScript -ScriptPath $cliPath -Arguments @('help')
+    Assert-True -Condition ($helpResult.ExitCode -eq 0 -and $helpResult.Output -match 'No command runs git pull or git fetch') -Message 'CLI help must pass and explain the no-fetch boundary'
+    $profilesResult = Invoke-HubScript -ScriptPath $cliPath -Arguments @('list', 'profiles')
+    Assert-True -Condition ($profilesResult.ExitCode -eq 0 -and $profilesResult.Output -match 'profiles/standard-product\.md' -and $profilesResult.Output -match 'architecture-and-data') -Message 'CLI profile list must use real catalog data'
+    $topicsResult = Invoke-HubScript -ScriptPath $cliPath -Arguments @('list', 'topics')
+    Assert-True -Condition ($topicsResult.ExitCode -eq 0 -and $topicsResult.Output -match 'rules/PRODUCT\.md' -and $topicsResult.Output -match 'project-study') -Message 'CLI topic list must use real catalog data'
+    $unknownCommandResult = Invoke-HubScript -ScriptPath $cliPath -Arguments @('unknown-command')
+    Assert-True -Condition ($unknownCommandResult.ExitCode -ne 0 -and $unknownCommandResult.Output -match 'Unknown command') -Message 'unknown CLI command must fail clearly'
+    $missingProjectRootResult = Invoke-HubScript -ScriptPath $cliPath -Arguments @('status')
+    Assert-True -Condition ($missingProjectRootResult.ExitCode -ne 0 -and $missingProjectRootResult.Output -match 'requires -ProjectRoot') -Message 'project commands must explain a missing ProjectRoot'
+    $unknownSelectionRoot = Join-Path $tempRoot 'unknown selection project'
+    New-Item -ItemType Directory -Path $unknownSelectionRoot | Out-Null
+    $unknownProfileResult = Invoke-HubScript -ScriptPath $cliPath -Arguments @('init', '-ProjectRoot', $unknownSelectionRoot, '-Profiles', 'missing-profile')
+    Assert-True -Condition ($unknownProfileResult.ExitCode -ne 0 -and $unknownProfileResult.Output -match 'Unknown profile') -Message 'CLI init must validate profiles through the catalog'
 
     $validatorPath = Join-Path $hubRoot 'scripts/validate-commit-message.ps1'
     $validMessagePath = Join-Path $tempRoot 'valid-message.txt'
@@ -114,6 +150,46 @@ try {
     Assert-True -Condition ($invalidHookExitCode -ne 0) -Message 'repository commit-msg hook must reject invalid message'
 
     $initializerPath = Join-Path $hubRoot 'scripts/init-project-sync.ps1'
+
+    $notInitializedProjectRoot = Join-Path $tempRoot 'not initialized project'
+    New-Item -ItemType Directory -Path $notInitializedProjectRoot | Out-Null
+    $notInitializedStatus = Invoke-HubScript -ScriptPath $cliPath -Arguments @('status', '-ProjectRoot', $notInitializedProjectRoot)
+    Assert-True -Condition ($notInitializedStatus.ExitCode -eq 0 -and $notInitializedStatus.Output -match 'State: not-initialized') -Message 'status must identify a project without manifest'
+
+    $cliProjectRoot = Join-Path $tempRoot 'CLI project'
+    New-Item -ItemType Directory -Path $cliProjectRoot | Out-Null
+    $cliInit = Invoke-HubScript -ScriptPath $cliPath -Arguments @(
+        'init', '-ProjectRoot', $cliProjectRoot, '-Profiles', 'standard-product'
+    )
+    Assert-True -Condition ($cliInit.ExitCode -eq 0) -Message "CLI init must pass: $($cliInit.Output)"
+    Assert-True -Condition (Test-Path -LiteralPath (Join-Path $cliProjectRoot '.ai-rules/manifest.json')) -Message 'CLI init must create manifest'
+    Assert-True -Condition (Test-Path -LiteralPath (Join-Path $cliProjectRoot 'AGENTS.md')) -Message 'CLI init must seed AGENTS.md by default'
+    Assert-True -Condition (Test-Path -LiteralPath (Join-Path $cliProjectRoot '.ai-rules/RULESET.md')) -Message 'CLI init must seed RULESET.md by default'
+    $seededProjectRules = Get-Content -LiteralPath (Join-Path $cliProjectRoot '.ai-rules/PROJECT_RULES.md') -Raw -Encoding UTF8
+    Assert-True -Condition (([regex]::Matches($seededProjectRules, '(?m)^## ')).Count -eq 6 -and $seededProjectRules.Length -lt 2500) -Message 'CLI init must seed the minimal PROJECT_RULES.md'
+    $repeatCliInit = Invoke-HubScript -ScriptPath $cliPath -Arguments @('init', '-ProjectRoot', $cliProjectRoot)
+    Assert-True -Condition ($repeatCliInit.ExitCode -ne 0 -and $repeatCliInit.Output -match 'already exists') -Message 'repeat CLI init must fail explicitly'
+
+    $cliProjectBeforeStatus = Get-TreeSnapshot -Root $cliProjectRoot
+    $unpinnedStatus = Invoke-HubScript -ScriptPath $cliPath -Arguments @('status', '-ProjectRoot', $cliProjectRoot)
+    Assert-True -Condition ($unpinnedStatus.ExitCode -eq 0 -and $unpinnedStatus.Output -match 'State: unpinned') -Message 'status must identify an unpinned manifest'
+    Assert-True -Condition ((Get-TreeSnapshot -Root $cliProjectRoot) -eq $cliProjectBeforeStatus) -Message 'status must not change project files'
+
+    $cliApply = Invoke-HubScript -ScriptPath $cliPath -Arguments @('apply', '-ProjectRoot', $cliProjectRoot)
+    Assert-True -Condition ($cliApply.ExitCode -eq 0) -Message "CLI apply must use existing sync: $($cliApply.Output)"
+    $cliManifestPath = Join-Path $cliProjectRoot '.ai-rules/manifest.json'
+    $cliManifest = Get-Content -LiteralPath $cliManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $currentHubRevision = (& git -C $hubRoot rev-parse HEAD).Trim()
+    $cliManifest.source.revision = $currentHubRevision
+    $cliManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $cliManifestPath -Encoding UTF8
+    $synchronizedSnapshot = Get-TreeSnapshot -Root $cliProjectRoot
+    $synchronizedStatus = Invoke-HubScript -ScriptPath $cliPath -Arguments @('status', '-ProjectRoot', $cliProjectRoot)
+    Assert-True -Condition ($synchronizedStatus.ExitCode -eq 0 -and $synchronizedStatus.Output -match 'State: synchronized') -Message "status must identify synchronized project: $($synchronizedStatus.Output)"
+    Assert-True -Condition ((Get-TreeSnapshot -Root $cliProjectRoot) -eq $synchronizedSnapshot) -Message 'synchronized status must stay read-only'
+
+    $updatePreview = Invoke-HubScript -ScriptPath $cliPath -Arguments @('update', '-ProjectRoot', $cliProjectRoot)
+    Assert-True -Condition ($updatePreview.ExitCode -eq 0 -and $updatePreview.Output -match 'Current project revision:' -and $updatePreview.Output -match 'Target hub revision:' -and $updatePreview.Output -match 'No files were changed') -Message 'update preview must show both revisions and remain explicit'
+    Assert-True -Condition ((Get-TreeSnapshot -Root $cliProjectRoot) -eq $synchronizedSnapshot) -Message 'update preview must not change manifest, lock, or upstream'
 
     $existingFilesProjectRoot = Join-Path $tempRoot 'project with existing local files'
     $existingFilesRulesRoot = Join-Path $existingFilesProjectRoot '.ai-rules'
@@ -265,6 +341,78 @@ try {
     Assert-True -Condition ($outsideManagedPlan.ExitCode -ne 0) -Message 'locked target outside upstream must fail'
     Assert-True -Condition ($outsideManagedPlan.Output -match 'outside the managed upstream directory') -Message 'outside-managed error must explain the lock boundary'
     [System.IO.File]::WriteAllText($lockPath, $validLockJson, (New-Object System.Text.UTF8Encoding($false)))
+
+    $cleanHubRoot = Join-Path $tempRoot 'clean hub fixture'
+    New-Item -ItemType Directory -Path $cleanHubRoot | Out-Null
+    foreach ($fixtureDirectory in @('profiles', 'rules', 'scripts', 'sync', 'templates')) {
+        Copy-Item -LiteralPath (Join-Path $hubRoot $fixtureDirectory) -Destination $cleanHubRoot -Recurse
+    }
+    Copy-Item -LiteralPath $cliPath -Destination (Join-Path $cleanHubRoot 'ai-rules.ps1')
+    & git -C $cleanHubRoot init --quiet
+    Assert-True -Condition ($LASTEXITCODE -eq 0) -Message 'clean update fixture must initialize a Git repository'
+    & git -C $cleanHubRoot config core.autocrlf false
+    Assert-True -Condition ($LASTEXITCODE -eq 0) -Message 'clean update fixture must keep copied line endings stable'
+    & git -C $cleanHubRoot add --all
+    Assert-True -Condition ($LASTEXITCODE -eq 0) -Message 'clean update fixture files must stage'
+    & git -C $cleanHubRoot -c user.name='AI Rules Hub Tests' -c user.email='tests@example.invalid' commit --quiet -m 'test(sync): create clean fixture'
+    Assert-True -Condition ($LASTEXITCODE -eq 0) -Message 'clean update fixture must create a commit'
+
+    $cleanCliPath = Join-Path $cleanHubRoot 'ai-rules.ps1'
+    $updateProjectRoot = Join-Path $tempRoot 'update apply project'
+    New-Item -ItemType Directory -Path $updateProjectRoot | Out-Null
+    $cleanInit = Invoke-HubScript -ScriptPath $cleanCliPath -Arguments @('init', '-ProjectRoot', $updateProjectRoot, '-Profiles', 'standard-product')
+    Assert-True -Condition ($cleanInit.ExitCode -eq 0) -Message "clean CLI init must pass: $($cleanInit.Output)"
+    $cleanInitialApply = Invoke-HubScript -ScriptPath $cleanCliPath -Arguments @('apply', '-ProjectRoot', $updateProjectRoot)
+    Assert-True -Condition ($cleanInitialApply.ExitCode -eq 0) -Message "clean initial Apply must pass: $($cleanInitialApply.Output)"
+
+    $updateManifestPath = Join-Path $updateProjectRoot '.ai-rules/manifest.json'
+    $updateLockPath = Join-Path $updateProjectRoot '.ai-rules/lock.json'
+    $initialCleanHubRevision = (& git -C $cleanHubRoot rev-parse HEAD).Trim()
+    $initialUpdateManifest = Get-Content -LiteralPath $updateManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $initialUpdateManifest.source.revision = $initialCleanHubRevision
+    $initialUpdateManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $updateManifestPath -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $cleanHubRoot 'fixture-revision.txt') -Value 'second clean revision' -Encoding UTF8
+    & git -C $cleanHubRoot add fixture-revision.txt
+    & git -C $cleanHubRoot -c user.name='AI Rules Hub Tests' -c user.email='tests@example.invalid' commit --quiet -m 'test(sync): advance fixture revision'
+    Assert-True -Condition ($LASTEXITCODE -eq 0) -Message 'clean update fixture must advance to a second revision'
+    $updateAvailableStatus = Invoke-HubScript -ScriptPath $cleanCliPath -Arguments @('status', '-ProjectRoot', $updateProjectRoot)
+    Assert-True -Condition ($updateAvailableStatus.ExitCode -eq 0 -and $updateAvailableStatus.Output -match 'State: update-available') -Message "status must identify a newer hub checkout: $($updateAvailableStatus.Output)"
+
+    $updateApply = Invoke-HubScript -ScriptPath $cleanCliPath -Arguments @('update', '-ProjectRoot', $updateProjectRoot, '-Apply')
+    Assert-True -Condition ($updateApply.ExitCode -eq 0 -and $updateApply.Output -match 'Revision accepted and synchronization applied') -Message "update -Apply must pass in a clean hub: $($updateApply.Output)"
+    $cleanHubRevision = (& git -C $cleanHubRoot rev-parse HEAD).Trim()
+    $updatedManifest = Get-Content -LiteralPath $updateManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    Assert-True -Condition ($updatedManifest.source.revision -eq $cleanHubRevision -and $updatedManifest.source.revision -match '^[0-9a-f]{40}$') -Message 'update -Apply must write the full current hub SHA'
+
+    $beforeIdempotentUpdate = Get-TreeSnapshot -Root $updateProjectRoot
+    $idempotentUpdate = Invoke-HubScript -ScriptPath $cleanCliPath -Arguments @('update', '-ProjectRoot', $updateProjectRoot, '-Apply')
+    Assert-True -Condition ($idempotentUpdate.ExitCode -eq 0) -Message "repeated update must pass: $($idempotentUpdate.Output)"
+    Assert-True -Condition ((Get-TreeSnapshot -Root $updateProjectRoot) -eq $beforeIdempotentUpdate) -Message 'repeated update on the same revision must be idempotent'
+
+    $updateManagedCorePath = Join-Path $updateProjectRoot '.ai-rules/upstream/CORE.md'
+    Add-Content -LiteralPath $updateManagedCorePath -Value "`nlocal conflict" -Encoding UTF8
+    $manifestBeforeConflict = [System.IO.File]::ReadAllBytes($updateManifestPath)
+    $lockBeforeConflict = [System.IO.File]::ReadAllBytes($updateLockPath)
+    $conflictingUpdate = Invoke-HubScript -ScriptPath $cleanCliPath -Arguments @('update', '-ProjectRoot', $updateProjectRoot, '-Apply')
+    Assert-True -Condition ($conflictingUpdate.ExitCode -ne 0 -and $conflictingUpdate.Output -match 'conflict') -Message 'update -Apply must stop before Apply on a managed conflict'
+    Assert-True -Condition (([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($updateManifestPath))) -eq ([Convert]::ToBase64String($manifestBeforeConflict))) -Message 'conflicting update must not change manifest'
+    Assert-True -Condition (([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($updateLockPath))) -eq ([Convert]::ToBase64String($lockBeforeConflict))) -Message 'conflicting update must not execute Apply or change lock'
+    Copy-Item -LiteralPath (Join-Path $cleanHubRoot 'rules/CORE.md') -Destination $updateManagedCorePath -Force
+
+    $failingManifest = Get-Content -LiteralPath $updateManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $failingManifest.source.revision = $null
+    $failingManifest.topics = @('project-study')
+    $failingManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $updateManifestPath -Encoding UTF8
+    $manifestBeforeFailedApply = [System.IO.File]::ReadAllBytes($updateManifestPath)
+    Set-ItemProperty -LiteralPath $updateLockPath -Name IsReadOnly -Value $true
+    try {
+        $failedUpdateApply = Invoke-HubScript -ScriptPath $cleanCliPath -Arguments @('update', '-ProjectRoot', $updateProjectRoot, '-Apply')
+    }
+    finally {
+        Set-ItemProperty -LiteralPath $updateLockPath -Name IsReadOnly -Value $false
+    }
+    Assert-True -Condition ($failedUpdateApply.ExitCode -ne 0 -and $failedUpdateApply.Output -match 'Apply failed') -Message 'update must expose an underlying Apply failure'
+    Assert-True -Condition (([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($updateManifestPath))) -eq ([Convert]::ToBase64String($manifestBeforeFailedApply))) -Message 'failed Apply must restore the original manifest bytes'
 
     $manifest.schemaVersion = '0.1'
     $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding UTF8

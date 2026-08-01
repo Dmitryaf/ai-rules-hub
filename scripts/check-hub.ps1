@@ -16,6 +16,7 @@ function Get-RepoRelativePath {
 $requiredPaths = @(
     'AGENTS.md',
     'README.md',
+    'ai-rules.ps1',
     'CONTRIBUTING.md',
     '.github/SECURITY.md',
     'rules/README.md',
@@ -23,9 +24,9 @@ $requiredPaths = @(
     'hub/PROJECT_RULES.md',
     'hub/ARCHITECTURE.md',
     'hub/COMMIT_RULES.md',
-    'hub/SOURCE_PROVENANCE.md',
     'profiles/README.md',
     'templates/README.md',
+    'templates/PROJECT_RULES.full.md',
     'sync/README.md',
     'sync/catalog.json',
     'sync/project-manifest.schema.json',
