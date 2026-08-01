@@ -2,19 +2,50 @@
   "schemaVersion": "0.1",
   "core": ["rules/CORE.md"],
   "topics": {
-    "product": "rules/PRODUCT.md",
-    "architecture-and-data": "rules/ARCHITECTURE_AND_DATA.md",
-    "implementation": "rules/IMPLEMENTATION.md",
-    "quality": "rules/QUALITY.md",
-    "security-and-privacy": "rules/SECURITY_AND_PRIVACY.md",
-    "documentation": "rules/DOCUMENTATION.md",
-    "git-and-delivery": "rules/GIT_AND_DELIVERY.md",
-    "ai-collaboration": "rules/AI_COLLABORATION.md",
-    "research-and-evidence": "rules/RESEARCH_AND_EVIDENCE.md",
-    "project-study": "rules/PROJECT_STUDY.md"
+    "product": {
+      "file": "rules/PRODUCT.md",
+      "description": "Продуктовые требования, пользовательские сценарии и безопасный язык интерфейса."
+    },
+    "architecture-and-data": {
+      "file": "rules/ARCHITECTURE_AND_DATA.md",
+      "description": "Архитектурные границы, источники истины, данные, API и миграции."
+    },
+    "implementation": {
+      "file": "rules/IMPLEMENTATION.md",
+      "description": "Практики изменения кода, конфигурации, зависимостей и совместимости."
+    },
+    "quality": {
+      "file": "rules/QUALITY.md",
+      "description": "Тестирование, проверки и критерии завершения изменений."
+    },
+    "security-and-privacy": {
+      "file": "rules/SECURITY_AND_PRIVACY.md",
+      "description": "Секреты, доступ, чувствительные данные и граница публичного контекста."
+    },
+    "documentation": {
+      "file": "rules/DOCUMENTATION.md",
+      "description": "Структура документации, канонические документы и маршрутизация контекста."
+    },
+    "git-and-delivery": {
+      "file": "rules/GIT_AND_DELIVERY.md",
+      "description": "Git, коммиты, CI/CD, релизы и внешние операции."
+    },
+    "ai-collaboration": {
+      "file": "rules/AI_COLLABORATION.md",
+      "description": "Режимы совместной работы с AI и сохранение контроля разработчика."
+    },
+    "research-and-evidence": {
+      "file": "rules/RESEARCH_AND_EVIDENCE.md",
+      "description": "Исследования, проверка неизвестного и доказательные рекомендации."
+    },
+    "project-study": {
+      "file": "rules/PROJECT_STUDY.md",
+      "description": "Создание подробной учебной документации по существующему проекту."
+    }
   },
   "profiles": {
     "standard-product": {
+      "description": "Обычное пользовательское приложение или сервис.",
       "file": "profiles/standard-product.md",
       "topics": [
         "product",
@@ -26,6 +57,7 @@
       ]
     },
     "data-sensitive": {
+      "description": "Проект с личными, финансовыми, медицинскими или другими чувствительными данными.",
       "file": "profiles/data-sensitive.md",
       "topics": [
         "security-and-privacy",
@@ -35,6 +67,7 @@
       ]
     },
     "research-driven": {
+      "description": "Проект, решения которого зависят от исследований, runtime evidence или неизвестных API.",
       "file": "profiles/research-driven.md",
       "topics": [
         "research-and-evidence",
@@ -44,6 +77,7 @@
       ]
     },
     "learning-project": {
+      "description": "Проект, в котором разработка одновременно является обучением владельца.",
       "file": "profiles/learning-project.md",
       "topics": [
         "ai-collaboration",
@@ -53,6 +87,7 @@
       ]
     },
     "public-repository": {
+      "description": "Репозиторий, который публикуется или готовится к публикации.",
       "file": "profiles/public-repository.md",
       "topics": [
         "security-and-privacy",
