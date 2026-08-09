@@ -23,6 +23,7 @@ $powerShellExe = (Get-Process -Id $PID).Path
 $catalogPath = Join-Path $hubRoot 'sync/catalog.json'
 $syncScriptPath = Join-Path $hubRoot 'scripts/sync-rules.ps1'
 $initScriptPath = Join-Path $hubRoot 'scripts/init-project-sync.ps1'
+$promptScriptPath = Join-Path $hubRoot 'scripts/show-prompt.ps1'
 . (Join-Path $hubRoot 'scripts/sync-common.ps1')
 
 function Write-Help {
@@ -34,6 +35,7 @@ function Write-Help {
   doctor -ProjectRoot PATH Проверить подключение проекта без изменений.
   list profiles            Показать профили и их назначение.
   list topics              Показать темы и их назначение.
+  prompt audit             Показать готовый запрос подключения и аудита.
   init   -ProjectRoot PATH Подготовить проект без применения правил.
   status -ProjectRoot PATH Показать состояние подключения проекта.
   plan   -ProjectRoot PATH Предварительно показать изменения текущей revision.
@@ -45,6 +47,7 @@ function Write-Help {
 Примеры
 
   .\ai-rules.ps1 list profiles
+  .\ai-rules.ps1 prompt audit
   .\ai-rules.ps1 init -ProjectRoot C:\path\to\project -Profiles standard-product
   .\ai-rules.ps1 doctor -ProjectRoot C:\path\to\project
   .\ai-rules.ps1 status -ProjectRoot C:\path\to\project
@@ -1345,6 +1348,16 @@ try {
                 }
             }
         }
+        'prompt' {
+            if ([string]::IsNullOrWhiteSpace($ListTarget) -or $ListTarget.ToLowerInvariant() -ne 'audit') {
+                throw "Для команды 'prompt' укажите 'audit'."
+            }
+            $result = Invoke-ChildScript -ScriptPath $promptScriptPath -Arguments @('-Name', 'audit') -Capture
+            if ($result.ExitCode -ne 0) {
+                throw 'Не удалось вывести готовый запрос подключения и аудита.'
+            }
+            Write-Output $result.Output.TrimEnd()
+        }
         'init' {
             $resolvedProjectRoot = Resolve-ProjectRoot -Path $ProjectRoot
             $catalog = Get-Catalog
@@ -1379,7 +1392,7 @@ try {
             Write-Host '2. Примените закреплённую revision:'
             Write-Host "   .\ai-rules.ps1 update -ProjectRoot `"$resolvedProjectRoot`" -Apply"
             Write-Host '3. Откройте целевой проект в AI-агенте и используйте запрос:'
-            Write-Host '   templates/PROJECT_AUDIT_PROMPT.md'
+            Write-Host '   .\ai-rules.ps1 prompt audit'
             Write-Host '   Общие правила переносить вручную не нужно.'
         }
         'plan' {
