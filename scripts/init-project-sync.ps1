@@ -174,3 +174,4 @@ if ($SeedProjectFiles) {
 
 Write-Host 'Инициализация не применяет правила автоматически.'
 Write-Host "Следующий шаг: .\ai-rules.ps1 update -ProjectRoot `"$projectRootFull`""
+Write-Host 'После первого update -Apply используйте templates/PROJECT_AUDIT_PROMPT.md.'
