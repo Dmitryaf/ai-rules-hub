@@ -1374,13 +1374,13 @@ try {
             Write-Host 'в рамках подключения. Обнаруженные разрывы зафиксируйте отдельно.'
             Write-Host "`nПеред первым применением:"
             Write-Host ''
-            Write-Host '1. Заполните .ai-rules/RULESET.md.'
-            Write-Host '2. Заполните .ai-rules/PROJECT_RULES.md.'
-            Write-Host '3. Проверьте или объедините корневой AGENTS.md.'
-            Write-Host '4. Просмотрите первое применение:'
+            Write-Host '1. Просмотрите первое применение:'
             Write-Host "   .\ai-rules.ps1 update -ProjectRoot `"$resolvedProjectRoot`""
-            Write-Host '5. Примените закреплённую revision:'
+            Write-Host '2. Примените закреплённую revision:'
             Write-Host "   .\ai-rules.ps1 update -ProjectRoot `"$resolvedProjectRoot`" -Apply"
+            Write-Host '3. Откройте целевой проект в AI-агенте и используйте запрос:'
+            Write-Host '   templates/PROJECT_AUDIT_PROMPT.md'
+            Write-Host '   Общие правила переносить вручную не нужно.'
         }
         'plan' {
             $resolvedProjectRoot = Resolve-ProjectRoot -Path $ProjectRoot
