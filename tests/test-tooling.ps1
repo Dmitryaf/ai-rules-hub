@@ -106,6 +106,22 @@ try {
     $hubCheck = Get-Content -LiteralPath (Join-Path $hubRoot 'scripts/check-hub.ps1') -Raw -Encoding UTF8
     $catalog = Get-Content -LiteralPath (Join-Path $hubRoot 'sync/catalog.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 
+    $crlfHubRoot = Join-Path $tempRoot 'crlf hub fixture'
+    foreach ($trackedPath in @(& git -C $hubRoot ls-files)) {
+        $sourcePath = Join-Path $hubRoot $trackedPath
+        $targetPath = Join-Path $crlfHubRoot $trackedPath
+        $targetDirectory = Split-Path -Parent $targetPath
+        if (-not (Test-Path -LiteralPath $targetDirectory)) {
+            New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
+        }
+        Copy-Item -LiteralPath $sourcePath -Destination $targetPath
+    }
+    $crlfGitignorePath = Join-Path $crlfHubRoot '.gitignore'
+    $crlfGitignore = [System.IO.File]::ReadAllText($crlfGitignorePath).Replace("`r`n", "`n").Replace("`r", "`n").Replace("`n", "`r`n")
+    [System.IO.File]::WriteAllText($crlfGitignorePath, $crlfGitignore, (New-Object System.Text.UTF8Encoding($false)))
+    $crlfHubCheck = Invoke-HubScript -ScriptPath (Join-Path $crlfHubRoot 'scripts/check-hub.ps1')
+    Assert-True -Condition ($crlfHubCheck.ExitCode -eq 0) -Message "hub validation must accept a clean Windows checkout: $($crlfHubCheck.Output)"
+
     foreach ($auditConcept in @('перечень', 'классификация', 'канонического источника', 'оставить/объединить/перенести/архивировать/удалить', 'согласование', 'изменение', 'проверка ссылок', 'сохранности информации')) {
         Assert-True -Condition ($documentationRule.Contains($auditConcept)) -Message "documentation audit must cover: $auditConcept"
     }
