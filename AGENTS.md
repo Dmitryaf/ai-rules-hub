@@ -2,7 +2,7 @@
 
 Перед изменениями прочитай:
 
-1. [`rules/CORE.md`](rules/CORE.md) — обязательный baseline;
+1. [`rules/CORE.md`](rules/CORE.md) — обязательная основа;
 2. [`hub/PROJECT_RULES.md`](hub/PROJECT_RULES.md) — правила именно этого хаба;
 3. [`hub/ARCHITECTURE.md`](hub/ARCHITECTURE.md) — границы нормативных правил, профилей и шаблонов;
 4. [`hub/COMMIT_RULES.md`](hub/COMMIT_RULES.md) — формат и границы коммитов;

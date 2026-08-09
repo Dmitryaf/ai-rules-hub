@@ -54,6 +54,7 @@
       "topics": [
         "product",
         "architecture-and-data",
+        "security-and-privacy",
         "implementation",
         "quality",
         "documentation",
@@ -76,6 +77,7 @@
       "topics": [
         "research-and-evidence",
         "architecture-and-data",
+        "security-and-privacy",
         "product",
         "quality"
       ]

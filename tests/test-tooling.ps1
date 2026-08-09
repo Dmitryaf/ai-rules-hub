@@ -107,7 +107,7 @@ try {
     $catalog = Get-Content -LiteralPath (Join-Path $hubRoot 'sync/catalog.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 
     $crlfHubRoot = Join-Path $tempRoot 'crlf hub fixture'
-    foreach ($trackedPath in @(& git -C $hubRoot ls-files)) {
+    foreach ($trackedPath in @(& git -C $hubRoot ls-files --cached --others --exclude-standard)) {
         $sourcePath = Join-Path $hubRoot $trackedPath
         $targetPath = Join-Path $crlfHubRoot $trackedPath
         $targetDirectory = Split-Path -Parent $targetPath
@@ -121,6 +121,9 @@ try {
     [System.IO.File]::WriteAllText($crlfGitignorePath, $crlfGitignore, (New-Object System.Text.UTF8Encoding($false)))
     $crlfHubCheck = Invoke-HubScript -ScriptPath (Join-Path $crlfHubRoot 'scripts/check-hub.ps1')
     Assert-True -Condition ($crlfHubCheck.ExitCode -eq 0) -Message "hub validation must accept a clean Windows checkout: $($crlfHubCheck.Output)"
+    Add-Content -LiteralPath (Join-Path $crlfHubRoot 'README.md') -Value "`nСлучайный tooling в русском тексте." -Encoding UTF8
+    $mixedLanguageCheck = Invoke-HubScript -ScriptPath (Join-Path $crlfHubRoot 'scripts/check-hub.ps1')
+    Assert-True -Condition ($mixedLanguageCheck.ExitCode -ne 0 -and $mixedLanguageCheck.Output -match 'Смешение языков.*README\.md') -Message 'hub validation must reject common accidental English words in Russian prose'
 
     foreach ($auditConcept in @('перечень', 'классификация', 'канонического источника', 'оставить/объединить/перенести/архивировать/удалить', 'согласование', 'изменение', 'проверка ссылок', 'сохранности информации')) {
         Assert-True -Condition ($documentationRule.Contains($auditConcept)) -Message "documentation audit must cover: $auditConcept"
@@ -137,7 +140,7 @@ try {
     Assert-True -Condition (([regex]::Matches($projectRulesTemplate, '(?m)^## ')).Count -eq 7 -and $projectRulesTemplate.Length -lt 2500 -and $projectRulesTemplate -notmatch '\|.*\|.*\|') -Message 'default project rules template must stay minimal'
     Assert-True -Condition ($fullProjectRulesTemplate -match 'docs/README\.md' -and $fullProjectRulesTemplate -match '\|.*\|.*\|') -Message 'full project rules template must retain detailed routing content'
     foreach ($projectTemplate in @($projectRulesTemplate, $fullProjectRulesTemplate)) {
-        Assert-True -Condition ($projectTemplate -match 'не установлен' -and $projectTemplate -match 'не установлена' -and $projectTemplate -match 'Не создавай документацию, tooling или CI' -and $projectTemplate -match 'RULESET\.md') -Message 'project rules templates must describe missing sources without creating them during adoption'
+        Assert-True -Condition ($projectTemplate -match 'не установлен' -and $projectTemplate -match 'не установлена' -and $projectTemplate -match 'Не создавай документацию, инструменты или CI' -and $projectTemplate -match 'RULESET\.md') -Message 'project rules templates must describe missing sources without creating them during adoption'
         Assert-True -Condition ($projectTemplate -match 'Публичная документация' -and $projectTemplate -match 'Локальная или закрытая документация' -and $projectTemplate -match 'Критерий публикации') -Message 'project rules templates must support an explicit documentation boundary'
         Assert-True -Condition ($projectTemplate -notmatch 'ROADMAP\.md|BACKLOG\.md|decisions/') -Message 'project rules templates must not require public planning or decision-log files'
     }
@@ -145,20 +148,21 @@ try {
     Assert-True -Condition ($projectRulesTemplate -notmatch 'Специальная аудитория и терминология' -and $fullProjectRulesTemplate -match 'Специальная аудитория и терминология.*не требуется') -Message 'special terminology must stay optional and only in the full project rules template'
     Assert-True -Condition ($rulesetTemplate -match 'не локальное исключение' -and $rulesetTemplate -match 'не разрешение на исправление' -and $rulesetTemplate -match 'правило.*наблюдаемое несоответствие.*подтверждение.*риск.*условие возврата' -and $rulesetTemplate -match 'неизвестно') -Message 'RULESET deferred gaps must remain decision records, not permission to fix'
     Assert-True -Condition ($profilesReadme -match 'новым и изменяемым файлам' -and $profilesReadme -match 'внешним действием.*обязательной проверкой' -and $profilesReadme -match 'не разрешает аудит всего репозитория') -Message 'profile guidance must be prospective and action-gated'
-    Assert-True -Condition ($publicRepositoryProfile -match '(?m)^### Постоянные инварианты\s*$' -and $publicRepositoryProfile -match '(?m)^### Гейты внешнего действия\s*$' -and $publicRepositoryProfile -match 'Существующие несоответствия.*разрывами внедрения' -and $publicRepositoryProfile -match 'LICENSE.*CONTRIBUTING.*security policy') -Message 'public profile must separate ongoing invariants, external-action gates, and adoption gaps'
+    Assert-True -Condition ($publicRepositoryProfile -match '(?m)^### Постоянные инварианты\s*$' -and $publicRepositoryProfile -match '(?m)^### Гейты внешнего действия\s*$' -and $publicRepositoryProfile -match 'Существующие несоответствия.*разрывами внедрения' -and $publicRepositoryProfile -match 'LICENSE.*CONTRIBUTING.*правил безопасности') -Message 'public profile must separate ongoing invariants, external-action gates, and adoption gaps'
     Assert-True -Condition ($publicRepositoryProfile -match 'аудиторию.*назначение.*необходимость' -and $publicRepositoryProfile -match 'PROJECT_STUDY.*не является разрешением публикации') -Message 'public profile must gate documentation publication without duplicating the internal-document catalog'
     Assert-True -Condition ($publicRepositoryProfile -match 'не внутреннее происхождение правил' -and $publicRepositoryProfile -match 'авторстве, лицензии и правах распространения') -Message 'public profile must omit internal rule provenance while preserving required attribution'
     Assert-True -Condition ($documentationRule -match 'маршрутов.*не является.*полной ревизией' -and $documentationRule -match 'ревизия не даёт разрешения исправлять' -and $documentationRule -match 'выбор темы документации не запускает полный перечень') -Message 'documentation routing and review must not authorize fixes'
     Assert-True -Condition ($documentationRule -match '(?m)^## Аудитория и граница публикации\s*$' -and $documentationRule -match 'публичный / внутренний в Git / локальный' -and $documentationRule -match 'явно названной внешней аудитории') -Message 'documentation rule must be the canonical audience and publication boundary'
     Assert-True -Condition ($documentationRule -match 'сложность текста.*знаниям читателя' -and $documentationRule -match 'главный вывод до подробностей' -and $documentationRule -match 'сказать то же проще.*без потери смысла') -Message 'documentation must adapt complexity to the reader and preserve meaning while simplifying'
-    Assert-True -Condition ($aiCollaborationRule -match 'проверка исходного состояния.*отдельно и без изменений' -and $aiCollaborationRule -match 'исправление.*выбора владельцем' -and $aiCollaborationRule -match 'не превращает найденное несоответствие в новую подзадачу') -Message 'AI collaboration must keep connection, review, and fixes separate'
-    Assert-True -Condition ($hubProjectRules -match '\.\./profiles/public-repository\.md' -and $hubProjectRules -match 'maintainer-led') -Message 'hub project rules must apply the public repository profile explicitly'
+    Assert-True -Condition ($aiCollaborationRule -match 'одному запросу.*разными фазами' -and $aiCollaborationRule -match 'После фиксации этой границы аудит.*без изменений' -and $aiCollaborationRule -match 'Исправление начинается только после выбора владельцем') -Message 'AI collaboration must separate adoption, read-only review, and selected fixes by phase'
+    Assert-True -Condition ($aiCollaborationRule -notmatch 'Sol|Terra|Luna|Текущее сопоставление моделей|рекомендуемую модель|усилие рассуждения|модельный пул') -Message 'AI collaboration must not prescribe model selection'
+    Assert-True -Condition ($hubProjectRules -match '\.\./profiles/public-repository\.md' -and $hubProjectRules -match 'Публичная модель участия управляется владельцем') -Message 'hub project rules must apply the public repository profile explicitly'
     Assert-True -Condition ($securityRule -match 'Задачи' -and $securityRule -match 'AGENTS\.md' -and $securityRule -match 'контекст подключённого сервиса') -Message 'security rule must treat public input and agent instructions as trust-boundary concerns'
     Assert-True -Condition ($securityRule -match 'недоверенный источник.*контекст или память.*решение агента.*инструмент' -and $securityRule -match 'минимальные права.*одну задачу.*короткий срок' -and $securityRule -match 'вне модели' -and $securityRule -match 'долговременную память' -and $securityRule -match 'MCP') -Message 'security rule must cover agent source-to-impact paths, least privilege, deterministic gates, memory, and tool supply chain'
-    Assert-True -Condition ($deliveryRule -match '(?m)^## Supply chain\s*$' -and $deliveryRule -match 'граф зависимостей' -and $deliveryRule -match 'Публикуемый артефакт' -and $deliveryRule -match 'пропорциональ') -Message 'delivery rule must structurally cover dependencies, published artifacts, and proportional supply-chain safeguards'
+    Assert-True -Condition ($deliveryRule -match '(?m)^## Цепочка поставки\s*$' -and $deliveryRule -match 'граф зависимостей' -and $deliveryRule -match 'Публикуемый артефакт' -and $deliveryRule -match 'пропорциональ') -Message 'delivery rule must structurally cover dependencies, published artifacts, and proportional supply-chain safeguards'
     Assert-True -Condition ($validationWorkflow -match '(?m)^permissions:\s*\r?\n\s+contents:\s*read\s*$' -and $validationWorkflow -match 'actions/checkout@[0-9a-f]{40}' -and $validationWorkflow -match 'persist-credentials:\s*false') -Message 'validation workflow must be read-only and use pinned checkout without persisted credentials'
     Assert-True -Condition ((Test-Path -LiteralPath (Join-Path $hubRoot 'CONTRIBUTING.md')) -and (Test-Path -LiteralPath (Join-Path $hubRoot '.github/SECURITY.md'))) -Message 'public repository entry points must exist'
-    Assert-True -Condition ($hubCheck -match 'LICENSE\.md' -and $hubCheck -match 'GitHub-discoverable CONTRIBUTING' -and $hubCheck -match 'templates/PROJECT_AUDIT_PROMPT\.md' -and $hubCheck -match 'full 40-character commit SHA') -Message 'hub check must enforce public repository hygiene and the onboarding prompt'
+    Assert-True -Condition ($hubCheck -match 'LICENSE\.md' -and $hubCheck -match 'GitHub-discoverable CONTRIBUTING' -and $hubCheck -match 'templates/PROJECT_AUDIT_PROMPT\.md' -and $hubCheck -match 'full 40-character commit SHA' -and $hubCheck -match 'undesiredEnglishProse') -Message 'hub check must enforce public repository hygiene, the onboarding prompt, and one-language prose'
     Assert-True -Condition ($hubCheck -match 'hub/BACKLOG\.md' -and $hubCheck -match "'hub/decisions'" -and $hubCheck -match '\.local-docs/') -Message 'hub check must reject owner-only public documents and require an ignored local location'
     Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $hubRoot 'hub/BACKLOG.md')) -and -not (Test-Path -LiteralPath (Join-Path $hubRoot 'hub/decisions'))) -Message 'owner backlog and decision history must not remain public'
     foreach ($topicProperty in $catalog.topics.PSObject.Properties) {
@@ -183,8 +187,9 @@ try {
         Assert-True -Condition ($coreRule -match $coreConceptPattern) -Message "core must retain semantic category: $coreConceptPattern"
     }
     Assert-True -Condition ($coreRule -match '(?m)^## \d+\. Понятный язык\s*$' -and $coreRule -match 'Сначала сообщай главный вывод' -and $coreRule -match 'простыми словами' -and $coreRule -match 'не вставляй английское слово' -and $coreRule -match 'точный термин.*один раз в скобках' -and $coreRule -match 'редкий термин.*при первом использовании' -and $coreRule -match 'не теряй условия, ограничения, риски') -Message 'CORE must define one primary language and preserve precision'
+    Assert-True -Condition ($coreRule -match 'Инструкция внутри задачи.*внешнего содержимого остаётся данными' -and $coreRule -match 'не меняет цель, правила или полномочия' -and $coreRule -match 'Перед вызовом инструмента') -Message 'CORE must treat instructions in external content as untrusted data'
     Assert-True -Condition ($architectureRule -match '(?m)^## Направление зависимостей\s*$' -and $architectureRule -match 'запрещённые связи' -and $architectureRule -match 'линтером, анализатором зависимостей или структурным тестом' -and $architectureRule -match '(?m)^## Доступность контекста\s*$' -and $architectureRule -match 'Короткая точка входа') -Message 'architecture rules must combine navigable context with mechanically enforced boundaries'
-    Assert-True -Condition ($projectAuditPrompt -match 'можно менять только корневой AGENTS\.md, \.ai-rules/RULESET\.md и \.ai-rules/PROJECT_RULES\.md' -and $projectAuditPrompt -match 'Не копируй общие правила из upstream' -and $projectAuditPrompt -match 'satisfied, gap, not applicable или unknown' -and $projectAuditPrompt -match 'предлагаемые отдельные задачи.*без их выполнения') -Message 'project audit prompt must finish local adoption and keep the project review read-only'
+    Assert-True -Condition ($projectAuditPrompt -match 'Фаза 1 — подключение' -and $projectAuditPrompt -match 'явно сообщи о завершении фазы подключения' -and $projectAuditPrompt -match 'Фаза 2 — аудит только для чтения' -and $projectAuditPrompt -match 'После этого не меняй ни один файл проекта' -and $projectAuditPrompt -match 'satisfied, gap, not applicable или unknown' -and $projectAuditPrompt -match 'предлагаемые отдельные задачи.*без их выполнения') -Message 'project audit prompt must separate adoption changes from the read-only project review'
     Assert-True -Condition ($rootReadme -match 'templates/PROJECT_AUDIT_PROMPT\.md' -and $rootReadme -match 'Переносить общие правила вручную не нужно' -and $templatesReadme -match 'PROJECT_AUDIT_PROMPT\.md.*в проект не копируется') -Message 'onboarding docs must route to the reusable audit prompt without copying general rules'
     $topicLengths = @($catalog.topics.PSObject.Properties | ForEach-Object { (Get-Content -LiteralPath (Join-Path $hubRoot ([string]$_.Value.file)) -Raw -Encoding UTF8).Length })
     Assert-True -Condition ($coreRule.Length -lt (($topicLengths | Measure-Object -Maximum).Maximum) -and $coreRule.Length -lt (($topicLengths | Measure-Object -Sum).Sum / 3)) -Message 'core must remain compact relative to thematic rules'
@@ -195,6 +200,7 @@ try {
         Assert-True -Condition ($reliabilityRule -match ('(?m)^## ' + [regex]::Escape($reliabilityHeading) + '\s*$')) -Message "reliability topic must retain section: $reliabilityHeading"
     }
     Assert-True -Condition ('reliability-and-operations' -notin @($catalog.profiles.'standard-product'.topics)) -Message 'standard-product must not include reliability by default'
+    Assert-True -Condition ('security-and-privacy' -in @($catalog.profiles.'standard-product'.topics) -and 'security-and-privacy' -in @($catalog.profiles.'research-driven'.topics)) -Message 'standard and research profiles must make the full AI security rule available when relevant'
     Assert-True -Condition ($standardProductProfile -match 'проверяемый пользовательский или эксплуатационный результат') -Message 'standard-product must require a verifiable user or operational outcome'
     Assert-True -Condition ($dataSensitiveProfile -match 'модел[ьи] удаления' -and $dataSensitiveProfile -match 'Retention' -and $dataSensitiveProfile -match 'backup') -Message 'data-sensitive must cover deletion model, retention, and backup behavior'
     Assert-True -Condition ($productRule -match 'основной способ ввода платформы' -and $productRule -match 'web/desktop.*клавиатур') -Message 'product accessibility must cover platform input and web/desktop keyboard access'
@@ -203,6 +209,10 @@ try {
     $cliPath = Join-Path $hubRoot 'ai-rules.ps1'
     $helpResult = Invoke-HubScript -ScriptPath $cliPath -Arguments @('help')
     Assert-True -Condition ($helpResult.ExitCode -eq 0 -and $helpResult.Output -match 'git pull' -and $helpResult.Output -match 'git fetch') -Message 'CLI help must pass and explain the no-fetch boundary'
+    $auditPromptResult = Invoke-HubScript -ScriptPath $cliPath -Arguments @('prompt', 'audit')
+    Assert-True -Condition ($auditPromptResult.ExitCode -eq 0 -and $auditPromptResult.Output -match '^Заверши подключение AI Rules Hub' -and $auditPromptResult.Output -match 'Фаза 1 — подключение' -and $auditPromptResult.Output -match 'Фаза 2 — аудит только для чтения' -and $auditPromptResult.Output -notmatch '```') -Message 'CLI must print the reusable audit prompt without its Markdown wrapper'
+    $unknownPromptResult = Invoke-HubScript -ScriptPath $cliPath -Arguments @('prompt', 'missing')
+    Assert-True -Condition ($unknownPromptResult.ExitCode -ne 0 -and $unknownPromptResult.Output -match "укажите 'audit'") -Message 'CLI prompt command must reject unknown prompt names'
     $profilesResult = Invoke-HubScript -ScriptPath $cliPath -Arguments @('list', 'profiles')
     Assert-True -Condition ($profilesResult.ExitCode -eq 0 -and $profilesResult.Output -match 'profiles/standard-product\.md' -and $profilesResult.Output.Contains([string]$catalog.profiles.'standard-product'.description)) -Message 'CLI profile list must use catalog descriptions'
     $topicsResult = Invoke-HubScript -ScriptPath $cliPath -Arguments @('list', 'topics')
@@ -270,7 +280,7 @@ try {
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $cliProjectRoot 'AGENTS.md')) -Message 'CLI init must seed AGENTS.md by default'
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $cliProjectRoot '.ai-rules/RULESET.md')) -Message 'CLI init must seed RULESET.md by default'
     Assert-True -Condition ($cliInit.Output -match 'update' -and $cliInit.Output -match '-Apply') -Message 'CLI init must print the onboarding update checklist'
-    Assert-True -Condition ($cliInit.Output -match 'templates/PROJECT_AUDIT_PROMPT\.md' -and $cliInit.Output -match 'Общие правила переносить вручную не нужно') -Message 'CLI init must route to the post-apply audit prompt'
+    Assert-True -Condition ($cliInit.Output -match '\.\\ai-rules\.ps1 prompt audit' -and $cliInit.Output -match 'Общие правила переносить вручную не нужно') -Message 'CLI init must route to the post-apply audit prompt command'
     $seededRuleset = Get-Content -LiteralPath (Join-Path $cliProjectRoot '.ai-rules/RULESET.md') -Raw -Encoding UTF8
     Assert-True -Condition ($seededRuleset -match '- `standard-product`.*<почему выбран>') -Message 'CLI init must seed selected profile in backticks with a reason placeholder'
     Assert-True -Condition (([regex]::Matches($seededRuleset, '(?m)^Нет\.$')).Count -eq 2) -Message 'CLI init must mark optional RULESET sections as empty'
@@ -809,7 +819,7 @@ try {
 
     $failingManifest = Get-Content -LiteralPath $updateManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $failingManifest.source.revision = $null
-    $failingManifest.topics = @('project-study', 'security-and-privacy')
+    $failingManifest.topics = @('project-study', 'reliability-and-operations')
     $failingManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $updateManifestPath -Encoding UTF8
     $manifestBeforeFailedApply = [System.IO.File]::ReadAllBytes($updateManifestPath)
     Set-ItemProperty -LiteralPath $updateLockPath -Name IsReadOnly -Value $true

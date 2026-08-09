@@ -37,6 +37,7 @@ $requiredPaths = @(
     'scripts/sync-rules.ps1',
     'scripts/sync-common.ps1',
     'scripts/init-project-sync.ps1',
+    'scripts/show-prompt.ps1',
     '.githooks/commit-msg',
     '.github/workflows/validate.yml',
     'tests/test-tooling.ps1'
@@ -130,6 +131,18 @@ $markdownFiles = Get-ChildItem -LiteralPath $repoRoot -Recurse -File -Filter '*.
     }
 
 $linkPattern = [regex]'\[[^\]]*\]\((?<target>[^)]+)\)'
+$undesiredEnglishProse = [ordered]@{
+    '\btooling\b' = 'инструменты'
+    '\bmanaged(?:-|\b)' = 'управляемый'
+    '\bread-only\b' = 'только для чтения'
+    '\bplaceholders?\b' = 'незаполненные места'
+    '\breleases?\b' = 'выпуск'
+    '\bremote fetch\b' = 'удалённая загрузка'
+    '\brollout\b' = 'внедрение'
+    '\bbaseline\b' = 'исходный уровень или базовый набор'
+    '\bdefault\b' = 'по умолчанию'
+    '\bsnapshot\b' = 'снимок'
+}
 
 foreach ($file in $markdownFiles) {
     $content = Get-Content -LiteralPath $file.FullName -Raw -Encoding UTF8
@@ -159,6 +172,27 @@ foreach ($file in $markdownFiles) {
         if (-not (Test-Path -LiteralPath $candidate)) {
             $relativeFile = Get-RepoRelativePath -Path $file.FullName
             $errors.Add("Broken local link in ${relativeFile}: $target")
+        }
+    }
+
+    $insideFencedCode = $false
+    $lineNumber = 0
+    foreach ($line in (Get-Content -LiteralPath $file.FullName -Encoding UTF8)) {
+        $lineNumber++
+        if ($line -match '^\s*(?:```|~~~)') {
+            $insideFencedCode = -not $insideFencedCode
+            continue
+        }
+        if ($insideFencedCode) {
+            continue
+        }
+
+        $proseLine = [regex]::Replace($line, '`[^`]*`', '')
+        foreach ($termPattern in $undesiredEnglishProse.Keys) {
+            if ($proseLine -match "(?i)$termPattern") {
+                $relativeFile = Get-RepoRelativePath -Path $file.FullName
+                $errors.Add("Смешение языков в ${relativeFile}:$lineNumber. Используйте '$($undesiredEnglishProse[$termPattern])' или оформите точный идентификатор как код.")
+            }
         }
     }
 }
