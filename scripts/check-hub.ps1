@@ -62,7 +62,8 @@ foreach ($forbiddenPublicPath in $forbiddenPublicPaths) {
 $gitignorePath = Join-Path $repoRoot '.gitignore'
 if (Test-Path -LiteralPath $gitignorePath -PathType Leaf) {
     $gitignoreContent = Get-Content -LiteralPath $gitignorePath -Raw -Encoding UTF8
-    if ($gitignoreContent -notmatch '(?m)^\.local-docs/$') {
+    $gitignoreLines = @($gitignoreContent -split '\r?\n')
+    if ($gitignoreLines -notcontains '.local-docs/') {
         $errors.Add('Local owner documentation directory must stay ignored: .local-docs/')
     }
 }
