@@ -189,7 +189,7 @@ foreach ($file in $markdownFiles) {
 
         $proseLine = [regex]::Replace($line, '`[^`]*`', '')
         foreach ($termPattern in $undesiredEnglishProse.Keys) {
-            if ($proseLine -match "(?i)$termPattern") {
+            if ($proseLine -match '[А-Яа-яЁё]' -and $proseLine -match "(?i)$termPattern") {
                 $relativeFile = Get-RepoRelativePath -Path $file.FullName
                 $errors.Add("Смешение языков в ${relativeFile}:$lineNumber. Используйте '$($undesiredEnglishProse[$termPattern])' или оформите точный идентификатор как код.")
             }
