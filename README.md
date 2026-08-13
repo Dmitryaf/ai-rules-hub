@@ -1,10 +1,10 @@
 # AI Rules Hub
 
-AI Rules Hub applies versioned, reusable coding-agent guidance to different repositories without replacing each project's own rules.
+AI Rules Hub is a local tool for sharing coding-agent rules between repositories. Each project keeps its own rules and can add explicit exceptions.
 
-Coding-agent instructions often drift between projects, grow into duplicated documents, or overwrite local constraints during updates. This repository separates shared rules from project-owned decisions and provides an explicit synchronization workflow that can be reviewed before it changes a target repository.
+Without one source, the same instruction is often copied into several projects and then updated in only some of them. The hub keeps shared rules in one place, shows the planned file changes, and updates only the files it manages.
 
-The hub is a local tool, not a hosted service. After synchronization, the target project keeps an autonomous snapshot and does not need the hub at runtime.
+The hub is not a hosted service. After an update, the project keeps a local copy of the selected rules and does not need the hub while an agent is working.
 
 ## How it works
 
@@ -16,33 +16,33 @@ flowchart TD
     D --> E[Coding agent]
 ```
 
-Each target repository chooses profiles and topics in a manifest. The hub resolves that selection, compares it with the installed snapshot, and reports the actions it would take.
+Each project selects project types (`profiles`) and work areas (`topics`) in a manifest. The hub compares that selection with the installed copy and shows which files it would add, update, keep, or leave for manual review.
 
 ```text
 Plan → Review → Apply → Verify
 ```
 
-- **Plan** calculates `add`, `update`, `unchanged`, `conflict`, and `orphan` states without writing files.
-- **Review** keeps the selected revision and every affected path visible before mutation.
-- **Apply** updates only the managed snapshot and stops on locally modified managed files.
-- **Verify** checks structure, revision metadata, routes, and content hashes.
+- **Plan** shows `add`, `update`, `unchanged`, `conflict`, and `orphan` states without changing files.
+- **Review** shows the selected Git revision and every affected path before an update.
+- **Apply** updates only the managed copy and stops if one of those files was changed locally.
+- **Verify** checks file structure, revision data, required routes, and file hashes.
 
 ## Engineering highlights
 
-- Rulesets are pinned to a full Git commit SHA.
-- The generated lock records the resolved composition and normalized SHA-256 for every managed file.
-- Synchronization is deterministic and idempotent for an unchanged source and manifest.
-- Preview is the default; mutation requires an explicit `-Apply` flag.
+- Each installed rule set points to a full Git commit SHA.
+- The generated lock records the final selection and SHA-256 of every managed file.
+- Running the same update twice with the same source and manifest produces no extra changes.
+- Preview is the default; changing files requires an explicit `-Apply` flag.
 - The tool owns only `.ai-rules/upstream/` and `.ai-rules/lock.json` in a target project.
 - Project-owned `AGENTS.md`, `RULESET.md`, `PROJECT_RULES.md`, and manifest files are not overwritten during updates.
 - Locally changed managed files become conflicts and remain untouched.
-- Removed selections become visible orphan states and are not deleted automatically.
+- Rules removed from the selection are reported as `orphan` files and are not deleted automatically.
 - Path validation keeps generated targets inside the managed directory.
-- The CLI distinguishes newer, older, diverged, and unavailable Git revisions instead of treating every SHA mismatch as an update.
+- The CLI reports whether the hub checkout is newer, older, unrelated, or unavailable instead of treating every different SHA as an update.
 
 ## Status
 
-AI Rules Hub is an early-stage public project. The CLI and local synchronization model have an autonomous test suite, but no stable release or compatibility guarantee has been announced. The currently verified workflow is Windows-based.
+AI Rules Hub is an early-stage public project. Automated tests cover the CLI and local file updates, but there is no stable release or compatibility promise yet. The verified workflow currently runs on Windows.
 
 ## Requirements
 
@@ -67,21 +67,21 @@ Set-Location ai-rules-hub
 .\ai-rules.ps1 status -ProjectRoot C:\path\to\project
 ```
 
-`init` prepares project-owned files but does not create a lock, install the managed snapshot, or overwrite an existing local rules entry point. The first `update` is a preview; `update -Apply` performs the reviewed transition to the current clean hub revision.
+`init` prepares files owned by the project. It does not create a lock, install shared rules, or replace an existing local entry point. The first `update` only shows a preview. After review, `update -Apply` installs rules from the current clean hub revision.
 
 ## Rule model
 
 ### CORE
 
-[`rules/CORE.md`](rules/CORE.md) contains the small baseline that applies almost everywhere: relevant context, truthful evidence, bounded changes, preservation of unknown values, proportional verification, plain language, and owner control over irreversible actions.
+[`rules/CORE.md`](rules/CORE.md) contains the short baseline used in almost every project: read relevant context, keep changes within scope, preserve unknown values, verify the result, use plain language, and leave irreversible actions under owner control.
 
 ### Topics
 
-[`rules/`](rules/README.md) contains focused guidance for product work, architecture and data, implementation, quality, operations, security, documentation, Git delivery, AI collaboration, research, and project study. An agent reads only the topics relevant to the current task.
+[`rules/`](rules/README.md) contains separate guidance for product work, architecture and data, implementation, quality, operations, security, documentation, Git delivery, AI collaboration, research, and project study. An agent reads only the files needed for the current task.
 
 ### Profiles
 
-[`profiles/`](profiles/README.md) compose topics for recurring project types and add only obligations specific to that type. A project can combine profiles; this is composition, not inheritance.
+[`profiles/`](profiles/README.md) group topics for common project types and add rules specific to that type. A project can select more than one profile.
 
 Common examples:
 
