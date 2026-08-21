@@ -17,7 +17,7 @@
 
 - изменение кода — `IMPLEMENTATION.md`, а при изменении границ или данных также `ARCHITECTURE_AND_DATA.md`;
 - тесты и проверки — `QUALITY.md`;
-- эксплуатационная надёжность, деградация, восстановление или performance/capacity — `RELIABILITY_AND_OPERATIONS.md`;
+- эксплуатационная надёжность, деградация, восстановление, производительность или предельная нагрузка — `RELIABILITY_AND_OPERATIONS.md`;
 - документация — `DOCUMENTATION.md`;
 - `commit`, ветка, запрос на слияние, выпуск или публикация — `GIT_AND_DELIVERY.md`;
 - продуктовый сценарий или UI — `PRODUCT.md`;
