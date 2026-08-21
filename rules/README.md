@@ -12,7 +12,7 @@
 | [`ARCHITECTURE_AND_DATA.md`](ARCHITECTURE_AND_DATA.md) | модели, границы модулей, хранение, API, миграции |
 | [`IMPLEMENTATION.md`](IMPLEMENTATION.md) | изменение кода, конфигурации или зависимостей |
 | [`QUALITY.md`](QUALITY.md) | проверка и передача любого изменения |
-| [`RELIABILITY_AND_OPERATIONS.md`](RELIABILITY_AND_OPERATIONS.md) | эксплуатация сервиса, деградация, восстановление или performance/capacity-риск |
+| [`RELIABILITY_AND_OPERATIONS.md`](RELIABILITY_AND_OPERATIONS.md) | эксплуатация сервиса, деградация, восстановление либо риск производительности или предельной нагрузки |
 | [`SECURITY_AND_PRIVACY.md`](SECURITY_AND_PRIVACY.md) | секреты, пользователи, личные данные, AI с инструментами, внешние сервисы, публикация |
 | [`DOCUMENTATION.md`](DOCUMENTATION.md) | создание или изменение документации и рабочего контекста |
 | [`GIT_AND_DELIVERY.md`](GIT_AND_DELIVERY.md) | ветки, коммиты, CI/CD, релиз или внешняя операция |
