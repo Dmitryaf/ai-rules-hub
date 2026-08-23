@@ -28,6 +28,7 @@ $requiredPaths = @(
     'hub/COMMIT_RULES.md',
     'profiles/README.md',
     'templates/README.md',
+    'templates/PROJECT_CONNECT_PROMPT.md',
     'templates/PROJECT_AUDIT_PROMPT.md',
     'templates/PROJECT_RULES.full.md',
     'sync/README.md',

@@ -35,7 +35,13 @@ function Write-Help {
   doctor -ProjectRoot PATH Проверить подключение проекта без изменений.
   list profiles            Показать профили и их назначение.
   list topics              Показать темы и их назначение.
+  prompt connect -ProjectRoot PATH
+                           Показать готовый запрос подключения для AI-агента.
   prompt audit             Показать готовый запрос подключения и аудита.
+  connect -ProjectRoot PATH
+                           Подготовить проект и показать первый Plan.
+  connect -ProjectRoot PATH -Apply
+                           Применить ранее показанный Plan и проверить результат.
   init   -ProjectRoot PATH Подготовить проект без применения правил.
   status -ProjectRoot PATH Показать состояние подключения проекта.
   plan   -ProjectRoot PATH Предварительно показать изменения текущей revision.
@@ -47,7 +53,10 @@ function Write-Help {
 Примеры
 
   .\ai-rules.ps1 list profiles
+  .\ai-rules.ps1 prompt connect -ProjectRoot C:\path\to\project
   .\ai-rules.ps1 prompt audit
+  .\ai-rules.ps1 connect -ProjectRoot C:\path\to\project -Profiles standard-product
+  .\ai-rules.ps1 connect -ProjectRoot C:\path\to\project -Profiles standard-product -Apply
   .\ai-rules.ps1 init -ProjectRoot C:\path\to\project -Profiles standard-product
   .\ai-rules.ps1 doctor -ProjectRoot C:\path\to\project
   .\ai-rules.ps1 status -ProjectRoot C:\path\to\project
@@ -58,6 +67,7 @@ function Write-Help {
 plan ничего не меняет и использует revision из manifest.
 apply работает только с уже закреплённой revision.
 update использует текущий checkout хаба и меняет проект только с -Apply.
+connect объединяет init и первый update, но не позволяет пропустить preview.
 
 CLI не выполняет git pull или git fetch автоматически.
 '@ | Write-Host
@@ -1300,7 +1310,14 @@ function Invoke-Update {
 
     Write-Host "`nRevision закреплена, правила применены." -ForegroundColor Green
     Write-Host "Проверьте diff: git -C `"$ResolvedProjectRoot`" diff -- .ai-rules/manifest.json .ai-rules/lock.json .ai-rules/upstream"
-    Write-Host ''
+
+    Write-Host "`nПроверка подключения:"
+    $doctorExitCode = Invoke-ProjectDoctor -ResolvedProjectRoot $ResolvedProjectRoot
+    if ($doctorExitCode -ne 0) {
+        throw 'Правила применены, но doctor обнаружил ошибку подключения. Проверьте сообщения выше и diff проекта.'
+    }
+
+    Write-Host "`nИтоговое состояние:"
     Show-Status -ResolvedProjectRoot $ResolvedProjectRoot
 }
 
@@ -1349,14 +1366,76 @@ try {
             }
         }
         'prompt' {
-            if ([string]::IsNullOrWhiteSpace($ListTarget) -or $ListTarget.ToLowerInvariant() -ne 'audit') {
-                throw "Для команды 'prompt' укажите 'audit'."
+            if ([string]::IsNullOrWhiteSpace($ListTarget) -or $ListTarget.ToLowerInvariant() -notin @('audit', 'connect')) {
+                throw "Для команды 'prompt' укажите 'connect' или 'audit'."
             }
-            $result = Invoke-ChildScript -ScriptPath $promptScriptPath -Arguments @('-Name', 'audit') -Capture
+            $promptName = $ListTarget.ToLowerInvariant()
+            $promptArguments = @('-Name', $promptName)
+            if ($promptName -eq 'connect') {
+                $resolvedProjectRoot = Resolve-ProjectRoot -Path $ProjectRoot
+                $promptArguments += @('-ProjectRoot', $resolvedProjectRoot)
+            }
+            $result = Invoke-ChildScript -ScriptPath $promptScriptPath -Arguments $promptArguments -Capture
             if ($result.ExitCode -ne 0) {
-                throw 'Не удалось вывести готовый запрос подключения и аудита.'
+                throw "Не удалось вывести готовый запрос '$promptName'."
             }
             Write-Output $result.Output.TrimEnd()
+        }
+        'connect' {
+            $resolvedProjectRoot = Resolve-ProjectRoot -Path $ProjectRoot
+            $manifestPath = Join-Path $resolvedProjectRoot '.ai-rules/manifest.json'
+            $selectedProfiles = ConvertTo-NameList -Values $Profiles
+            $selectedTopics = ConvertTo-NameList -Values $Topics
+
+            if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+                if ($Apply) {
+                    throw @"
+Первый Plan ещё не показан. Сначала выполните connect без -Apply:
+
+.\ai-rules.ps1 connect -ProjectRoot "$resolvedProjectRoot" -Profiles <profile>
+"@
+                }
+                if ($selectedProfiles.Count -eq 0 -and $selectedTopics.Count -eq 0) {
+                    throw 'Для нового проекта укажите хотя бы один -Profiles или -Topics. AI-агент может подобрать набор через prompt connect.'
+                }
+
+                $catalog = Get-Catalog
+                Assert-Selections -Catalog $catalog -SelectedProfiles $selectedProfiles -SelectedTopics $selectedTopics
+                $initArguments = @('-ProjectRoot', $resolvedProjectRoot, '-SeedProjectFiles')
+                if ($selectedProfiles.Count -gt 0) {
+                    $initArguments += @('-Profiles', ($selectedProfiles -join ','))
+                }
+                if ($selectedTopics.Count -gt 0) {
+                    $initArguments += @('-Topics', ($selectedTopics -join ','))
+                }
+                if ($NoSeedProjectFiles) {
+                    $initArguments = @($initArguments | Where-Object { $_ -ne '-SeedProjectFiles' })
+                }
+
+                Write-Host 'Подготовка локального слоя проекта:'
+                $initResult = Invoke-ChildScript -ScriptPath $initScriptPath -Arguments $initArguments
+                if ($initResult.ExitCode -ne 0) {
+                    throw 'Подготовка проекта завершилась ошибкой.'
+                }
+                Write-Host "`nЛокальный слой подготовлен. Теперь показан первый Plan; managed-файлы ещё не применяются."
+            }
+            else {
+                if ($NoSeedProjectFiles) {
+                    throw '-NoSeedProjectFiles применяется только при первой подготовке проекта.'
+                }
+                if ($selectedProfiles.Count -gt 0 -or $selectedTopics.Count -gt 0) {
+                    $manifest = Get-JsonFile -Path $manifestPath
+                    $manifestProfiles = @($manifest.profiles | ForEach-Object { [string]$_ } | Sort-Object)
+                    $manifestTopics = @($manifest.topics | ForEach-Object { [string]$_ } | Sort-Object)
+                    $requestedProfiles = @($selectedProfiles | Sort-Object)
+                    $requestedTopics = @($selectedTopics | Sort-Object)
+                    if (($manifestProfiles -join ',') -ne ($requestedProfiles -join ',') -or ($manifestTopics -join ',') -ne ($requestedTopics -join ',')) {
+                        throw 'Проект уже инициализирован, а переданный состав отличается от manifest. Изменяйте состав явно в project-owned файлах.'
+                    }
+                }
+            }
+
+            Invoke-Update -ResolvedProjectRoot $resolvedProjectRoot -Accept:$Apply
         }
         'init' {
             $resolvedProjectRoot = Resolve-ProjectRoot -Path $ProjectRoot
