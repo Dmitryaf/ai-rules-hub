@@ -86,7 +86,7 @@ function ConvertTo-AiRulesJsonValue {
             }
         }
         $lines.Add(('  ' * $IndentLevel) + '}')
-        return ($lines -join [Environment]::NewLine)
+        return ($lines -join "`n")
     }
 
     if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
@@ -121,7 +121,7 @@ function ConvertTo-AiRulesJsonValue {
             }
         }
         $lines.Add(('  ' * $IndentLevel) + ']')
-        return ($lines -join [Environment]::NewLine)
+        return ($lines -join "`n")
     }
 
     return ($Value | ConvertTo-Json -Compress)

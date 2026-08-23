@@ -303,7 +303,7 @@ try {
     $seededProjectRules = Get-Content -LiteralPath (Join-Path $cliProjectRoot '.ai-rules/PROJECT_RULES.md') -Raw -Encoding UTF8
     Assert-True -Condition (([regex]::Matches($seededProjectRules, '(?m)^## ')).Count -eq 7 -and $seededProjectRules.Length -lt 2500) -Message 'CLI init must seed the minimal PROJECT_RULES.md'
     $seededManifestText = Get-Content -LiteralPath (Join-Path $cliProjectRoot '.ai-rules/manifest.json') -Raw -Encoding UTF8
-    Assert-True -Condition ($seededManifestText -match '(?m)^  "source": \{\r?$' -and $seededManifestText -match '(?m)^  "topics": \[\],\r?$' -and $seededManifestText -match '(?m)^  "profiles": \["standard-product"\]\r?$' -and $seededManifestText -notmatch '(?m)^\s+"[^"]+":[ \t]{2,}') -Message 'initializer must write stable compact JSON formatting'
+    Assert-True -Condition ($seededManifestText -match '(?m)^  "source": \{$' -and $seededManifestText -match '(?m)^  "topics": \[\],$' -and $seededManifestText -match '(?m)^  "profiles": \["standard-product"\]$' -and $seededManifestText -notmatch "`r" -and $seededManifestText -notmatch '(?m)^\s+"[^"]+":[ \t]{2,}') -Message 'initializer must write stable compact LF JSON formatting'
     $repeatCliInit = Invoke-HubScript -ScriptPath $cliPath -Arguments @('init', '-ProjectRoot', $cliProjectRoot)
     Assert-True -Condition ($repeatCliInit.ExitCode -ne 0 -and $repeatCliInit.Output -match 'manifest' -and $repeatCliInit.Output -match 'существует') -Message 'repeat CLI init must fail explicitly'
 
@@ -607,7 +607,7 @@ try {
     $initialUpdateManifest = Get-Content -LiteralPath $updateManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
     Assert-True -Condition ($initialUpdateManifest.source.revision -eq $initialCleanHubRevision) -Message 'first update -Apply must write the initial clean hub revision'
     $initialUpdateLockText = Get-Content -LiteralPath $updateLockPath -Raw -Encoding UTF8
-    Assert-True -Condition ($initialUpdateLockText -match '(?m)^  "source": \{\r?$' -and $initialUpdateLockText -match '(?m)^  "profiles": \["learning-project", "standard-product"\],\r?$' -and $initialUpdateLockText -notmatch '(?m)^\s+"[^"]+":[ \t]{2,}') -Message 'sync must write stable compact JSON formatting'
+    Assert-True -Condition ($initialUpdateLockText -match '(?m)^  "source": \{$' -and $initialUpdateLockText -match '(?m)^  "profiles": \["learning-project", "standard-product"\],$' -and $initialUpdateLockText -notmatch "`r" -and $initialUpdateLockText -notmatch '(?m)^\s+"[^"]+":[ \t]{2,}') -Message 'sync must write stable compact LF JSON formatting'
     $updateRulesetPath = Join-Path $updateProjectRoot '.ai-rules/RULESET.md'
     $initialRuleset = Get-Content -LiteralPath $updateRulesetPath -Raw -Encoding UTF8
     Assert-True -Condition ($initialRuleset -match '- `standard-product`.*<почему выбран>' -and $initialRuleset -match '- `learning-project`.*<почему выбран>' -and $initialRuleset -match '- `project-study`.*<почему подключена отдельно>') -Message 'RULESET must seed selected profile and direct topic IDs in backticks'

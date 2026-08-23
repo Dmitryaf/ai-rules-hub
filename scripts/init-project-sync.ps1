@@ -144,7 +144,9 @@ $manifest = [ordered]@{
     profiles = @($Profiles | Sort-Object -Unique)
 }
 
-ConvertTo-AiRulesJson -InputObject $manifest -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+$manifestJson = (ConvertTo-AiRulesJson -InputObject $manifest -Depth 6) + "`n"
+$utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($manifestPath, $manifestJson, $utf8WithoutBom)
 Write-Host "[CREATED] Создан manifest: $manifestPath" -ForegroundColor Green
 
 if ($SeedProjectFiles) {

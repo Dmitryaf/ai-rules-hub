@@ -1282,7 +1282,7 @@ function Invoke-Update {
     $originalManifestBytes = [System.IO.File]::ReadAllBytes($manifestPath)
     $temporaryManifestPath = Join-Path (Split-Path -Parent $manifestPath) "manifest.$([Guid]::NewGuid().ToString('N')).tmp"
     $manifest.source.revision = $hubState.Revision
-    $manifestJson = (ConvertTo-AiRulesJson -InputObject $manifest -Depth 10) + [Environment]::NewLine
+    $manifestJson = (ConvertTo-AiRulesJson -InputObject $manifest -Depth 10) + "`n"
     try {
         $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
         [System.IO.File]::WriteAllText($temporaryManifestPath, $manifestJson, $utf8WithoutBom)

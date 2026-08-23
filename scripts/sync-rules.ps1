@@ -367,7 +367,8 @@ if (Test-Path -LiteralPath $lockPath -PathType Leaf) {
 if ($lockChanged) {
     $lockObject.generatedAtUtc = [DateTime]::UtcNow.ToString('o')
     $lockJson = ConvertTo-AiRulesJson -InputObject $lockObject -Depth 10
-    Set-Content -LiteralPath $lockPath -Value $lockJson -Encoding UTF8
+    $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($lockPath, $lockJson + "`n", $utf8WithoutBom)
     Write-Host "Lock обновлён: $lockPath" -ForegroundColor Green
 }
 else {
