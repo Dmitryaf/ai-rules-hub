@@ -70,6 +70,7 @@ function Get-RulesetSeedContent {
 
 $hubRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $projectRootFull = (Resolve-Path -LiteralPath $ProjectRoot).Path
+. (Join-Path $hubRoot 'scripts/sync-common.ps1')
 $catalogPath = Join-Path $hubRoot 'sync/catalog.json'
 $catalog = Get-Content -LiteralPath $catalogPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
@@ -143,7 +144,7 @@ $manifest = [ordered]@{
     profiles = @($Profiles | Sort-Object -Unique)
 }
 
-$manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+ConvertTo-AiRulesJson -InputObject $manifest -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
 Write-Host "[CREATED] Создан manifest: $manifestPath" -ForegroundColor Green
 
 if ($SeedProjectFiles) {

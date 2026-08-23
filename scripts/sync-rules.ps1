@@ -355,7 +355,7 @@ $lockObject = [ordered]@{
     files = $lockEntries
 }
 
-$lockJson = $lockObject | ConvertTo-Json -Depth 10
+$lockJson = ConvertTo-AiRulesJson -InputObject $lockObject -Depth 10
 $lockChanged = $true
 if (Test-Path -LiteralPath $lockPath -PathType Leaf) {
     $existingLockJson = [System.IO.File]::ReadAllText($lockPath).TrimEnd([char[]]@("`r", "`n"))
@@ -366,7 +366,7 @@ if (Test-Path -LiteralPath $lockPath -PathType Leaf) {
 
 if ($lockChanged) {
     $lockObject.generatedAtUtc = [DateTime]::UtcNow.ToString('o')
-    $lockJson = $lockObject | ConvertTo-Json -Depth 10
+    $lockJson = ConvertTo-AiRulesJson -InputObject $lockObject -Depth 10
     Set-Content -LiteralPath $lockPath -Value $lockJson -Encoding UTF8
     Write-Host "Lock обновлён: $lockPath" -ForegroundColor Green
 }

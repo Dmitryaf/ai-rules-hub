@@ -43,3 +43,95 @@ function Get-AiRulesSha256 {
 
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
+
+function ConvertTo-AiRulesJsonValue {
+    param(
+        $Value,
+        [int]$IndentLevel = 0
+    )
+
+    if ($null -eq $Value) {
+        return 'null'
+    }
+
+    $properties = $null
+    if ($Value -is [System.Collections.IDictionary]) {
+        $properties = @($Value.Keys | ForEach-Object {
+            [pscustomobject]@{ Name = [string]$_; Value = $Value[$_] }
+        })
+    }
+    elseif ($Value.GetType().FullName -eq 'System.Management.Automation.PSCustomObject') {
+        $properties = @($Value.PSObject.Properties | ForEach-Object {
+            [pscustomobject]@{ Name = $_.Name; Value = $_.Value }
+        })
+    }
+
+    if ($null -ne $properties) {
+        if ($properties.Count -eq 0) {
+            return '{}'
+        }
+        $lines = [System.Collections.Generic.List[string]]::new()
+        $lines.Add('{')
+        for ($index = 0; $index -lt $properties.Count; $index++) {
+            $property = $properties[$index]
+            $name = $property.Name | ConvertTo-Json -Compress
+            $formattedValue = ConvertTo-AiRulesJsonValue -Value $property.Value -IndentLevel ($IndentLevel + 1)
+            $valueLines = @($formattedValue -split '\r?\n')
+            $suffix = if ($index -lt $properties.Count - 1) { ',' } else { '' }
+            $firstLineSuffix = if ($valueLines.Count -eq 1) { $suffix } else { '' }
+            $lines.Add(('  ' * ($IndentLevel + 1)) + $name + ': ' + $valueLines[0] + $firstLineSuffix)
+            for ($lineIndex = 1; $lineIndex -lt $valueLines.Count; $lineIndex++) {
+                $lineSuffix = if ($lineIndex -eq $valueLines.Count - 1) { $suffix } else { '' }
+                $lines.Add($valueLines[$lineIndex] + $lineSuffix)
+            }
+        }
+        $lines.Add(('  ' * $IndentLevel) + '}')
+        return ($lines -join [Environment]::NewLine)
+    }
+
+    if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
+        $items = @($Value)
+        if ($items.Count -eq 0) {
+            return '[]'
+        }
+        $primitiveItems = @($items | Where-Object {
+            $_ -isnot [System.Collections.IDictionary] -and
+            ($null -eq $_ -or $_.GetType().FullName -ne 'System.Management.Automation.PSCustomObject') -and
+            -not ($_ -is [System.Collections.IEnumerable] -and $_ -isnot [string])
+        })
+        if ($primitiveItems.Count -eq $items.Count) {
+            $tokens = @($items | ForEach-Object { ConvertTo-AiRulesJsonValue -Value $_ })
+            $compact = '[' + ($tokens -join ', ') + ']'
+            if ((('  ' * $IndentLevel) + $compact).Length -le 80) {
+                return $compact
+            }
+        }
+
+        $lines = [System.Collections.Generic.List[string]]::new()
+        $lines.Add('[')
+        for ($index = 0; $index -lt $items.Count; $index++) {
+            $formattedItem = ConvertTo-AiRulesJsonValue -Value $items[$index] -IndentLevel ($IndentLevel + 1)
+            $itemLines = @($formattedItem -split '\r?\n')
+            for ($lineIndex = 0; $lineIndex -lt $itemLines.Count; $lineIndex++) {
+                $line = if ($lineIndex -eq 0) { ('  ' * ($IndentLevel + 1)) + $itemLines[$lineIndex] } else { $itemLines[$lineIndex] }
+                if ($lineIndex -eq $itemLines.Count - 1 -and $index -lt $items.Count - 1) {
+                    $line += ','
+                }
+                $lines.Add($line)
+            }
+        }
+        $lines.Add(('  ' * $IndentLevel) + ']')
+        return ($lines -join [Environment]::NewLine)
+    }
+
+    return ($Value | ConvertTo-Json -Compress)
+}
+
+function ConvertTo-AiRulesJson {
+    param(
+        [Parameter(Mandatory = $true)]$InputObject,
+        [int]$Depth = 10
+    )
+
+    return ConvertTo-AiRulesJsonValue -Value $InputObject
+}
