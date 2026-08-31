@@ -1524,7 +1524,7 @@ try {
     }
 }
 catch {
-    Write-Error $_.Exception.Message
+    [Console]::Error.WriteLine($_.Exception.Message)
     exit 1
 }
 

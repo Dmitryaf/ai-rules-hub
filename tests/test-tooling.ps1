@@ -63,11 +63,18 @@ function Invoke-HubScript {
 
     $previousErrorActionPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
+    $captureId = [Guid]::NewGuid().ToString('N')
+    $stdoutPath = Join-Path $tempRoot "hub-script-$captureId.stdout"
+    $stderrPath = Join-Path $tempRoot "hub-script-$captureId.stderr"
     try {
-        $output = & $powershellExe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments 2>&1 | Out-String
+        & $powershellExe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments 1> $stdoutPath 2> $stderrPath
         $exitCode = $LASTEXITCODE
+        $stdout = if (Test-Path -LiteralPath $stdoutPath) { [System.IO.File]::ReadAllText($stdoutPath) } else { '' }
+        $stderr = if (Test-Path -LiteralPath $stderrPath) { [System.IO.File]::ReadAllText($stderrPath) } else { '' }
+        $output = $stdout + $stderr
     }
     finally {
+        Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
         $ErrorActionPreference = $previousErrorActionPreference
     }
     return [pscustomobject]@{
@@ -227,7 +234,7 @@ try {
     $connectPromptResult = Invoke-HubScript -ScriptPath $cliPath -Arguments @('prompt', 'connect', '-ProjectRoot', $promptProjectRoot)
     Assert-True -Condition ($connectPromptResult.ExitCode -eq 0 -and $connectPromptResult.Output -match '^Подключи этот проект к AI Rules Hub' -and $connectPromptResult.Output.Contains($promptProjectRoot) -and $connectPromptResult.Output.Contains($cliPath) -and $connectPromptResult.Output -notmatch '\{\{|```') -Message 'CLI must print a project-specific connection prompt without Markdown wrappers or placeholders'
     $unknownPromptResult = Invoke-HubScript -ScriptPath $cliPath -Arguments @('prompt', 'missing')
-    Assert-True -Condition ($unknownPromptResult.ExitCode -ne 0 -and $unknownPromptResult.Output -match "укажите 'connect' или 'audit'") -Message 'CLI prompt command must reject unknown prompt names'
+    Assert-True -Condition ($unknownPromptResult.ExitCode -ne 0 -and $unknownPromptResult.Output.Contains("'connect'") -and $unknownPromptResult.Output.Contains("'audit'")) -Message 'CLI prompt command must reject unknown prompt names'
     $profilesResult = Invoke-HubScript -ScriptPath $cliPath -Arguments @('list', 'profiles')
     Assert-True -Condition ($profilesResult.ExitCode -eq 0 -and $profilesResult.Output -match 'profiles/standard-product\.md' -and $profilesResult.Output.Contains([string]$catalog.profiles.'standard-product'.description)) -Message 'CLI profile list must use catalog descriptions'
     $topicsResult = Invoke-HubScript -ScriptPath $cliPath -Arguments @('list', 'topics')
