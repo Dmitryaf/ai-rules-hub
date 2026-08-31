@@ -11,7 +11,7 @@
 Несовместимое изменение отмечается знаком `!`:
 
 ```text
-feat(sync)!: изменить формат lock-файла
+feat(sync)!: change the lock-file format
 ```
 
 ## Допустимые type
@@ -37,7 +37,7 @@ feat(sync)!: изменить формат lock-файла
 
 ## Summary и body
 
-- В summary используется короткая формулировка действия на русском или английском.
+- Summary и body пишутся на английском.
 - Header не длиннее 72 символов.
 - Summary не заканчивается точкой и не содержит пробелы по краям.
 - После header перед body находится пустая строка.
@@ -47,10 +47,10 @@ feat(sync)!: изменить формат lock-файла
 Примеры:
 
 ```text
-docs(core): уточнить правила достоверности
-feat(sync): добавить безопасное обновление managed-файлов
-test(tooling): проверить конфликт локального изменения
-ci(hub): запускать проверку структуры в pull request
+docs(core): clarify evidence rules
+feat(sync): add safe managed-file updates
+test(tooling): verify local change conflicts
+ci(hub): validate structure in pull requests
 ```
 
 ## Границы коммита

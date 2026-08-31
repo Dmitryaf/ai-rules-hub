@@ -19,6 +19,11 @@ if ($lines.Count -eq 0 -or [string]::IsNullOrWhiteSpace($lines[0])) {
 
 $header = $lines[0]
 
+if (($lines -join "`n") -match '[\u0400-\u04FF]') {
+    Write-Error 'Commit messages must be written in English.'
+    exit 1
+}
+
 if ($header -match '^(Merge .+|Revert ".+")$') {
     exit 0
 }

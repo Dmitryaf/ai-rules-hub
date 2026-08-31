@@ -244,6 +244,7 @@ try {
     $validatorPath = Join-Path $hubRoot 'scripts/validate-commit-message.ps1'
     $validMessagePath = Join-Path $tempRoot 'valid-message.txt'
     $invalidMessagePath = Join-Path $tempRoot 'invalid-message.txt'
+    $nonEnglishMessagePath = Join-Path $tempRoot 'non-english-message.txt'
 
     Set-Content -LiteralPath $validMessagePath -Value 'feat(sync): add manifest' -Encoding UTF8
     $validResult = Invoke-HubScript -ScriptPath $validatorPath -Arguments @('-MessageFile', $validMessagePath)
@@ -253,6 +254,11 @@ try {
     $invalidResult = Invoke-HubScript -ScriptPath $validatorPath -Arguments @('-MessageFile', $invalidMessagePath)
     Assert-True -Condition ($invalidResult.ExitCode -ne 0) -Message 'commit without scope must fail'
 
+    $nonEnglishMessage = "docs(ai): update guidance`n`nReason $([char]0x043F)"
+    Set-Content -LiteralPath $nonEnglishMessagePath -Value $nonEnglishMessage -Encoding UTF8
+    $nonEnglishResult = Invoke-HubScript -ScriptPath $validatorPath -Arguments @('-MessageFile', $nonEnglishMessagePath)
+    Assert-True -Condition ($nonEnglishResult.ExitCode -ne 0 -and $nonEnglishResult.Output -match 'English') -Message 'commit message with Cyrillic text must fail'
+
     $previousErrorActionPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
@@ -260,12 +266,15 @@ try {
         $validHookExitCode = $LASTEXITCODE
         & git -C $hubRoot -c core.hooksPath=.githooks hook run commit-msg -- $invalidMessagePath 2>&1 | Out-Null
         $invalidHookExitCode = $LASTEXITCODE
+        & git -C $hubRoot -c core.hooksPath=.githooks hook run commit-msg -- $nonEnglishMessagePath 2>&1 | Out-Null
+        $nonEnglishHookExitCode = $LASTEXITCODE
     }
     finally {
         $ErrorActionPreference = $previousErrorActionPreference
     }
     Assert-True -Condition ($validHookExitCode -eq 0) -Message 'repository commit-msg hook must invoke validator'
     Assert-True -Condition ($invalidHookExitCode -ne 0) -Message 'repository commit-msg hook must reject invalid message'
+    Assert-True -Condition ($nonEnglishHookExitCode -ne 0) -Message 'repository commit-msg hook must reject Cyrillic text'
 
     $initializerPath = Join-Path $hubRoot 'scripts/init-project-sync.ps1'
 
